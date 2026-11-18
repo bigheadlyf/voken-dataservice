@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>微元 · 服务端测试台</title>
+  <link rel="stylesheet" href="/test-assets/styles.css">
+  <script src="/test-assets/console.js?v=20261118-uuid" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell nav">
+      <a class="brand" href="/">微元 <span>服务端测试台</span></a>
+      <nav aria-label="页面导航"><a href="#employees">数字员工</a><a href="#runs">任务</a><a href="/docs">接口文档 ↗</a></nav>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div><h1 id="page-title">拓客联调</h1><p>注册测试账号，启动数字员工，核对线索与点数。</p></div>
+      <div class="connection"><span id="api-status">检查服务中</span><span id="provider-status">检查 DeepSeek 中</span><span id="customs-status">检查海关接口中</span></div>
+    </section>
+    <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+    <div class="account-grid">
+      <section class="panel" aria-labelledby="account-title">
+        <div class="section-title"><h2 id="account-title">测试账号</h2><button id="logout" class="text-button" type="button" hidden>退出登录</button></div>
+        <form id="auth-form" autocomplete="off">
+          <div class="fields two">
+            <label>中国大陆手机号<input id="phone" name="phone" type="tel" placeholder="13800000000" required></label>
+            <label>密码<input name="password" type="password" minlength="8" placeholder="至少 8 个字符" required></label>
+          </div>
+          <div class="fields otp"><label>测试验证码<input name="code" inputmode="numeric" placeholder="123456" maxlength="6"></label><button type="button" id="request-code" class="secondary">申请验证码</button></div>
+          <div class="buttons"><button type="submit" value="login">登录</button><button type="submit" value="register" class="secondary">注册并登录</button></div>
+        </form>
+        <p id="signed-in" class="signed-in" hidden></p>
+      </section>
+      <section class="panel wallet" aria-labelledby="points-title">
+        <div class="section-title"><h2 id="points-title">点数</h2><button id="refresh-points" class="text-button" type="button" data-auth disabled>刷新</button></div>
+        <div class="wallet-value"><strong id="available">—</strong><span>可用点数</span></div>
+        <p class="muted">预占 <span id="reserved">—</span> 点 <span id="point-price"></span></p>
+        <ul id="point-ledger" class="ledger"></ul>
+      </section>
+    </div>
+
+    <section class="panel" id="employees" aria-labelledby="employee-title">
+      <div class="section-title"><h2 id="employee-title">数字员工</h2><button id="refresh-agents" class="text-button" type="button" data-auth disabled>刷新列表</button></div>
+      <div class="employee-grid">
+        <form id="agent-form">
+          <fieldset data-auth disabled>
+            <div class="fields"><label>验收场景<select id="scenario"><option value="">自定义需求</option><option value="us">美国 · LED 采购客户</option><option value="fr">法国 · 运动水杯线下门店</option><option value="ru">俄罗斯 · HS 401110 轮胎采购商</option></select></label></div>
+            <div class="fields two"><label>员工名称<input name="name" maxlength="80" required></label><label>目标市场<input name="market" maxlength="100"></label></div>
+            <div class="fields three"><label>目标产品<input name="product" maxlength="150"></label><label>HS 编码<input name="hs_code" inputmode="numeric" pattern="[0-9]{6,10}"></label><label>线索数量<input name="target_count" type="number" min="1" max="30"></label></div>
+            <div class="fields"><label>拓客需求<textarea name="instructions" rows="4" maxlength="1600" required></textarea></label></div>
+            <div class="buttons"><button id="save-agent" type="submit">创建数字员工</button><button id="clear-edit" class="secondary" type="button" hidden>取消编辑</button></div>
+          </fieldset>
+        </form>
+        <div id="agent-list" class="items"><p class="empty">登录后查看数字员工。</p></div>
+      </div>
+    </section>
+
+    <section class="panel" id="buyer" aria-labelledby="buyer-title">
+      <div class="section-title"><h2 id="buyer-title">采购商查询</h2></div>
+      <form id="buyer-form">
+        <fieldset data-auth disabled>
+          <div class="fields two"><label>采购商名称<input name="buyer" maxlength="200" required></label><label>企业所属国代码<input name="buyer_country" placeholder="US" maxlength="2" pattern="[a-zA-Z]{2}" required></label></div>
+          <div class="buttons"><label class="consent"><input name="confirm_paid" type="checkbox" required>确认付费查找候选企业。</label><button id="submit-buyer" type="submit" disabled>匹配采购商</button></div>
+        </fieldset>
+      </form>
+    </section>
+
+    <section class="panel" id="customs" aria-labelledby="customs-title">
+      <div class="section-title"><h2 id="customs-title">海关核验</h2></div>
+      <form id="customs-form">
+        <fieldset data-auth disabled>
+          <p id="customs-company-selection" class="muted" hidden></p>
+          <div class="fields three"><label>采购商全称<input name="buyer" maxlength="200" required></label><label>采购商国家代码<input name="buyer_country" placeholder="RU" maxlength="2" pattern="[a-zA-Z]{2}" required></label><label>抵运国代码（选填）<input name="arrival_country" maxlength="2" pattern="[a-zA-Z]{2}"></label></div>
+          <div class="fields two"><label>六位 HS 编码<input name="hs_code" inputmode="numeric" placeholder="401110" pattern="[0-9]{6}"></label><label>产品词（编码或产品词至少一项）<input name="product" maxlength="150"></label></div>
+          <div class="fields two"><label>开始日期<input name="date_start" type="date" required></label><label>结束日期<input name="date_end" type="date" required></label></div>
+          <div class="buttons"><label class="consent"><input name="confirm_paid" type="checkbox" required>确认查询一页。此操作可能产生跨境魔方费用。</label><button type="submit" id="submit-customs" disabled>提交核验</button></div>
+        </fieldset>
+      </form>
+    </section>
+
+    <section class="panel" id="runs" aria-labelledby="runs-title">
+      <div class="section-title"><h2 id="runs-title">任务与结果</h2><button id="refresh-jobs" class="text-button" type="button" data-auth disabled>刷新任务</button></div>
+      <div class="employee-grid runs-grid">
+        <div id="job-list" class="items"><p class="empty">启动数字员工后，任务会出现在这里。</p></div>
+        <div id="job-result" class="result"><p class="empty">选择一条任务以查看详情和来源。</p></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

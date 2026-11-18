@@ -1,0 +1,501 @@
+import json
+from datetime import date, timedelta
+from hashlib import sha256
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from sqlalchemy import func, select
+
+from app.auth import session_factory, workspace_access
+from app.config import BILLABLE_OPERATIONS, BUYER_OPERATIONS
+from app.db import Agent, AgentVersion, Job, PointEntry, ProviderCall, Wallet, Workspace, utcnow, write_transaction
+
+
+router = APIRouter(prefix='/api/v1/workspaces/{workspace_id}', tags=['workspaces'])
+WorkspaceAccess = Annotated[str, Depends(workspace_access)]
+Sessions = Annotated[object, Depends(session_factory)]
+IdempotencyKey = Annotated[str | None, Header(min_length=1, max_length=64, pattern=r'^[a-z0-9._-]+$')]
+ACTIVE_STATES = ('queued', 'running', 'cancelling')
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=80)
+    instructions: str = Field(min_length=1, max_length=1600)
+    market: str | None = Field(default=None, max_length=100)
+    product: str | None = Field(default=None, max_length=150)
+    hs_code: str | None = Field(default=None, pattern=r'^[0-9]{6,10}$')
+    target_count: int | None = Field(default=None, ge=1, le=30)
+
+
+class AgentConfigPatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    name: str | None = None
+    instructions: str | None = None
+    market: str | None = None
+    product: str | None = None
+    hs_code: str | None = None
+    target_count: int | None = None
+
+
+class PublicSearch(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    instructions: str = Field(min_length=1, max_length=1000)
+
+
+class ReportRequest(BaseModel):
+    job_id: str = Field(min_length=32, max_length=32)
+    lead_index: int = Field(ge=0, lt=30)
+
+
+class CustomsVerificationRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
+
+    buyer: str = Field(min_length=1, max_length=200)
+    buyer_country: str = Field(pattern=r'^[A-Z]{2}$')
+    arrival_country: str | None = Field(default=None, pattern=r'^[A-Z]{2}$')
+    hs_code: str | None = Field(default=None, pattern=r'^[0-9]{6}$')
+    product: str | None = Field(default=None, min_length=1, max_length=150)
+    date_start: date
+    date_end: date
+    confirm_paid: Literal[True]
+    match_job_id: str | None = Field(default=None, min_length=32, max_length=32)
+    company_id: int | None = Field(default=None, ge=1, le=2**53 - 1)
+
+    @model_validator(mode='after')
+    def check_filters(self):
+        if not (self.hs_code or self.product):
+            raise ValueError('hs_code or product is required')
+        if self.date_start > self.date_end or self.date_end >= date.max:
+            raise ValueError('invalid trade date range')
+        if bool(self.match_job_id) != bool(self.company_id):
+            raise ValueError('match_job_id and company_id must be submitted together')
+        return self
+
+
+class BuyerRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
+
+    action: Literal['search', 'profile', 'contacts']
+    buyer: str | None = Field(default=None, min_length=1, max_length=200)
+    buyer_country: str | None = Field(default=None, pattern=r'^[A-Z]{2}$')
+    match_job_id: str | None = Field(default=None, min_length=32, max_length=32)
+    company_id: int | None = Field(default=None, ge=1, le=2**53 - 1)
+    confirm_paid: Literal[True]
+
+    @model_validator(mode='after')
+    def check_target(self):
+        if self.action == 'search':
+            valid = self.buyer and self.buyer_country and not (self.match_job_id or self.company_id)
+        else:
+            valid = self.match_job_id and self.company_id and not (self.buyer or self.buyer_country)
+        if not valid:
+            raise ValueError('Search requires buyer and country. Other actions require a selected search result.')
+        return self
+
+
+def lock_workspace(session, workspace: str) -> None:
+    session.execute(select(Workspace.id).where(Workspace.id == workspace).with_for_update()).scalar_one()
+
+
+def get_agent(session, workspace: str, agent_id: str) -> Agent:
+    agent = session.get(Agent, agent_id)
+    if agent is None or agent.workspace_id != workspace or agent.deleted_at is not None:
+        raise HTTPException(status_code=404, detail='agent_not_found')
+    return agent
+
+
+def current_config(session, agent: Agent) -> dict:
+    return session.get(AgentVersion, (agent.workspace_id, agent.id, agent.config_version)).config
+
+
+def agent_view(session, agent: Agent) -> dict:
+    return {
+        'id': agent.id,
+        'status': agent.status,
+        'config_version': agent.config_version,
+        'config': current_config(session, agent),
+    }
+
+
+def job_view(job: Job) -> dict:
+    return {
+        'id': job.id,
+        'agent_id': job.agent_id,
+        'config_version': job.config_version,
+        'operation': job.operation,
+        'status': job.status,
+        'point_cost': job.point_cost,
+        'points_charged': job.points_charged,
+        'error': job.error,
+        'result': job.result,
+        'created_at': job.created_at.isoformat() + 'Z',
+    }
+
+
+def get_job(session, workspace: str, job_id: str) -> Job:
+    job = session.get(Job, job_id)
+    if job is None or job.workspace_id != workspace:
+        raise HTTPException(status_code=404, detail='job_not_found')
+    return job
+
+
+def request_fingerprint(operation: str, identity: dict) -> str:
+    return sha256(json.dumps([operation, identity], sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+
+
+def replay_job(session, workspace: str, key: str | None, fingerprint: str) -> Job | None:
+    if key is None:
+        return None
+    job = session.scalar(select(Job).where(Job.workspace_id == workspace, Job.idempotency_key == key))
+    if job is not None and job.request_hash != fingerprint:
+        raise HTTPException(status_code=409, detail='idempotency_key_conflict')
+    return job
+
+
+def enqueue(session, workspace, settings, operation, payload, key, fingerprint, agent=None) -> Job:
+    pending = session.scalar(select(func.count()).select_from(Job).where(
+        Job.workspace_id == workspace, Job.status.in_(ACTIVE_STATES),
+    ))
+    if pending >= settings.max_pending_jobs:
+        raise HTTPException(status_code=429, detail='job_queue_limit')
+
+    points = settings.point_cost(operation)
+    wallet = session.get(Wallet, workspace)
+    if wallet.available < points:
+        raise HTTPException(status_code=409, detail='insufficient_points')
+
+    job = Job(
+        workspace_id=workspace, operation=operation, payload=payload, point_cost=points,
+        agent_id=agent.id if agent else None, config_version=agent.config_version if agent else None,
+        idempotency_key=key, request_hash=fingerprint,
+    )
+    session.add(job)
+    session.flush()
+    if points:
+        wallet.available -= points
+        wallet.reserved += points
+        session.add(PointEntry(workspace_id=workspace, reference=job.id, kind='reserve', points=points))
+    return job
+
+
+def has_deliverable(operation: str, result: dict | None) -> bool:
+    field = {'prospecting': 'leads', 'report': 'report', 'public_search': 'sources',
+             'customs_verification': 'customs', **dict.fromkeys(BUYER_OPERATIONS.values(), 'buyer')}.get(operation)
+    return bool(field and (result or {}).get(field))
+
+
+def finish_job(session, job: Job, status: str, result: dict | None = None, error: str | None = None) -> None:
+    if job.status not in ACTIVE_STATES:
+        return
+    if job.cancel_requested:
+        status = 'cancelled'
+    charged = job.point_cost if status == 'succeeded' or (
+        status == 'partial' and has_deliverable(job.operation, result)
+    ) else 0
+    if job.point_cost:
+        wallet = session.get(Wallet, job.workspace_id)
+        wallet.reserved -= job.point_cost
+        wallet.available += job.point_cost - charged
+        session.add(PointEntry(
+            workspace_id=job.workspace_id, reference=job.id, kind='charge' if charged else 'release',
+            points=job.point_cost,
+        ))
+    job.status = status
+    job.result = result
+    job.error = error
+    job.points_charged = charged
+    job.finished_at = utcnow()
+    fetched = session.scalars(select(ProviderCall).where(ProviderCall.job_id == job.id, ProviderCall.endpoint == 'fetch'))
+    for call in fetched:
+        if call.result is not None:
+            call.result = None
+
+
+@router.get('/points')
+def points_balance(workspace: WorkspaceAccess, sessions: Sessions):
+    with sessions() as session:
+        wallet = session.get(Wallet, workspace)
+        return {'available': wallet.available, 'reserved': wallet.reserved, 'points_per_100_cny': 1000}
+
+
+@router.get('/points/ledger')
+def point_ledger(workspace: WorkspaceAccess, sessions: Sessions, limit: int = Query(50, ge=1, le=100)):
+    with sessions() as session:
+        entries = session.scalars(select(PointEntry).where(PointEntry.workspace_id == workspace).order_by(
+            PointEntry.created_at.desc(), PointEntry.id.desc(),
+        ).limit(limit))
+        return [{'kind': item.kind, 'points': item.points, 'reference': item.reference,
+                 'created_at': item.created_at.isoformat() + 'Z'} for item in entries]
+
+
+@router.get('/points/costs')
+def point_costs(request: Request, workspace: WorkspaceAccess):
+    settings = request.app.state.settings
+    return {operation: settings.point_cost(operation) for operation in sorted(BILLABLE_OPERATIONS)}
+
+
+@router.post('/agents', status_code=201)
+def create_agent(body: AgentConfig, request: Request, workspace: WorkspaceAccess, sessions: Sessions):
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        limit = request.app.state.settings.max_agent_instances
+        if limit is not None and session.scalar(select(func.count()).select_from(Agent).where(
+            Agent.workspace_id == workspace, Agent.deleted_at.is_(None),
+        )) >= limit:
+            raise HTTPException(status_code=409, detail='agent_limit_reached')
+
+        agent = Agent(workspace_id=workspace)
+        session.add(agent)
+        session.flush()
+        session.add(AgentVersion(workspace_id=workspace, agent_id=agent.id, version=1, config=body.model_dump()))
+        session.flush()
+        return agent_view(session, agent)
+
+
+@router.get('/agents')
+def list_agents(workspace: WorkspaceAccess, sessions: Sessions):
+    with sessions() as session:
+        agents = session.scalars(select(Agent).where(Agent.workspace_id == workspace, Agent.deleted_at.is_(None)))
+        return [agent_view(session, agent) for agent in agents]
+
+
+@router.get('/agents/{agent_id}')
+def agent_details(agent_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    with sessions() as session:
+        return agent_view(session, get_agent(session, workspace, agent_id))
+
+
+@router.patch('/agents/{agent_id}')
+def update_agent(agent_id: str, body: AgentConfigPatch, workspace: WorkspaceAccess, sessions: Sessions):
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        agent = get_agent(session, workspace, agent_id)
+        changes = body.model_dump(exclude_unset=True)
+        if not changes:
+            return agent_view(session, agent)
+        try:
+            config = AgentConfig.model_validate({**current_config(session, agent), **changes})
+        except ValidationError:
+            raise HTTPException(status_code=422, detail='invalid_agent_configuration') from None
+        agent.config_version += 1
+        session.add(AgentVersion(workspace_id=workspace, agent_id=agent.id,
+                                 version=agent.config_version, config=config.model_dump()))
+        session.flush()
+        return agent_view(session, agent)
+
+
+@router.post('/agents/{agent_id}/runs', status_code=202)
+def start_agent(agent_id: str, request: Request, workspace: WorkspaceAccess, sessions: Sessions,
+                idempotency_key: IdempotencyKey = None):
+    fingerprint = request_fingerprint('prospecting', {'agent_id': agent_id})
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        replay = replay_job(session, workspace, idempotency_key, fingerprint)
+        if replay is not None:
+            return job_view(replay)
+        agent = get_agent(session, workspace, agent_id)
+        active = session.scalar(select(Job.id).where(
+            Job.workspace_id == workspace, Job.agent_id == agent.id, Job.status.in_(ACTIVE_STATES),
+        ).limit(1))
+        if active:
+            raise HTTPException(status_code=409, detail='agent_run_in_progress')
+        agent.status = 'enabled'
+        return job_view(enqueue(session, workspace, request.app.state.settings, 'prospecting',
+                                current_config(session, agent), idempotency_key, fingerprint, agent))
+
+
+def stop_agent(session, agent: Agent, delete: bool) -> None:
+    agent.status = 'deleted' if delete else 'paused'
+    if delete:
+        agent.deleted_at = utcnow()
+    active = session.scalars(select(Job).where(
+        Job.workspace_id == agent.workspace_id, Job.agent_id == agent.id, Job.status.in_(ACTIVE_STATES),
+    ))
+    for job in active:
+        job.cancel_requested = True
+        if job.status == 'queued':
+            finish_job(session, job, 'cancelled')
+        else:
+            job.status = 'cancelling'
+
+
+@router.post('/agents/{agent_id}/pause')
+def pause_agent(agent_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        agent = get_agent(session, workspace, agent_id)
+        stop_agent(session, agent, delete=False)
+        return agent_view(session, agent)
+
+
+@router.delete('/agents/{agent_id}', status_code=204)
+def delete_agent(agent_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        agent = session.get(Agent, agent_id)
+        if agent is None or agent.workspace_id != workspace:
+            raise HTTPException(status_code=404, detail='agent_not_found')
+        if agent.deleted_at is None:
+            stop_agent(session, agent, delete=True)
+
+
+@router.get('/jobs')
+def list_jobs(workspace: WorkspaceAccess, sessions: Sessions, agent_id: str | None = None,
+              limit: int = Query(50, ge=1, le=100)):
+    with sessions() as session:
+        query = select(Job).where(Job.workspace_id == workspace)
+        if agent_id is not None:
+            query = query.where(Job.agent_id == agent_id)
+        return [job_view(job) for job in session.scalars(query.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit))]
+
+
+@router.get('/jobs/{job_id}')
+def job_details(job_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    with sessions() as session:
+        return job_view(get_job(session, workspace, job_id))
+
+
+@router.get('/jobs/{job_id}/leads')
+def job_leads(job_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    with sessions() as session:
+        job = get_job(session, workspace, job_id)
+        return (job.result or {}).get('leads', [])
+
+
+@router.post('/public-searches', status_code=202)
+def public_search(body: PublicSearch, request: Request, workspace: WorkspaceAccess, sessions: Sessions,
+                  idempotency_key: IdempotencyKey = None):
+    payload = body.model_dump()
+    fingerprint = request_fingerprint('public_search', payload)
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        job = replay_job(session, workspace, idempotency_key, fingerprint)
+        if job is None:
+            job = enqueue(session, workspace, request.app.state.settings, 'public_search',
+                          payload, idempotency_key, fingerprint)
+        return job_view(job)
+
+
+def selected_buyer(session, workspace: str, job_id: str, company_id: int) -> dict:
+    job = get_job(session, workspace, job_id)
+    matches = (job.result or {}).get('buyer', {}).get('records', [])
+    if job.operation == 'buyer_search' and job.status == 'succeeded':
+        for match in matches:
+            if match.get('company_id') == company_id:
+                return match
+    raise HTTPException(status_code=404, detail='buyer_match_not_found')
+
+
+def customs_available(request: Request) -> bool:
+    return request.app.state.customs_configured and request.app.state.settings.upkuajing_daily_call_limit > 0
+
+
+@router.post('/buyer-enrichments', status_code=202)
+def enrich_buyer(body: BuyerRequest, request: Request, workspace: WorkspaceAccess,
+                 sessions: Sessions, idempotency_key: IdempotencyKey = None):
+    if idempotency_key is None:
+        raise HTTPException(status_code=422, detail='idempotency_key_required')
+    operation = BUYER_OPERATIONS[body.action]
+    submitted = body.model_dump(mode='json', exclude={'confirm_paid'}, exclude_none=True)
+    fingerprint = request_fingerprint(operation, submitted)
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        job = replay_job(session, workspace, idempotency_key, fingerprint)
+        if job is not None:
+            return job_view(job)
+
+        payload = submitted if body.action == 'search' else selected_buyer(session, workspace, body.match_job_id, body.company_id)
+        job = session.scalar(select(Job).where(
+            Job.workspace_id == workspace, Job.request_hash == fingerprint,
+            Job.created_at >= utcnow() - timedelta(hours=24), Job.status.in_((*ACTIVE_STATES, 'succeeded')),
+        ).order_by(Job.created_at.desc()).limit(1))
+        if job is None:
+            if not customs_available(request):
+                raise HTTPException(status_code=503, detail='customs_provider_unavailable')
+            job = enqueue(session, workspace, request.app.state.settings, operation, payload, idempotency_key, fingerprint)
+        return job_view(job)
+
+
+@router.post('/customs-verifications', status_code=202)
+def customs_verification(body: CustomsVerificationRequest, request: Request, workspace: WorkspaceAccess,
+                         sessions: Sessions, idempotency_key: IdempotencyKey = None):
+    if idempotency_key is None:
+        raise HTTPException(status_code=422, detail='idempotency_key_required')
+    settings = request.app.state.settings
+    payload = body.model_dump(mode='json', exclude={'confirm_paid'})
+    fingerprint = request_fingerprint('customs_verification', payload)
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        job = replay_job(session, workspace, idempotency_key, fingerprint)
+        if job is None:
+            if not customs_available(request):
+                raise HTTPException(status_code=503, detail='customs_provider_unavailable')
+            if body.company_id is not None:
+                selected = selected_buyer(session, workspace, body.match_job_id, body.company_id)
+                payload.update(buyer=selected['name'], buyer_country=selected['buyer_country'])
+            job = enqueue(session, workspace, settings, 'customs_verification', payload, idempotency_key, fingerprint)
+        return job_view(job)
+
+
+@router.post('/reports', status_code=202)
+def create_report(body: ReportRequest, request: Request, workspace: WorkspaceAccess, sessions: Sessions,
+                  idempotency_key: IdempotencyKey = None):
+    fingerprint = request_fingerprint('report', body.model_dump())
+    with write_transaction(sessions) as session:
+        lock_workspace(session, workspace)
+        replay = replay_job(session, workspace, idempotency_key, fingerprint)
+        if replay is not None:
+            return job_view(replay)
+        source = get_job(session, workspace, body.job_id)
+        leads = (source.result or {}).get('leads', [])
+        if body.lead_index >= len(leads):
+            raise HTTPException(status_code=404, detail='lead_not_found')
+        criteria = (source.result or {}).get('criteria', {})
+        payload = {'source_job_id': source.id, 'lead': leads[body.lead_index],
+                   'target_product': criteria.get('product') or source.payload.get('product')}
+        return job_view(enqueue(session, workspace, request.app.state.settings, 'report',
+                                payload, idempotency_key, fingerprint))
+
+
+@router.get('/reports/{report_id}')
+def report_details(report_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    with sessions() as session:
+        job = get_job(session, workspace, report_id)
+        if job.operation != 'report':
+            raise HTTPException(status_code=404, detail='report_not_found')
+        view = job_view(job)
+        result = job.result or {}
+        if not result.get('report'):
+            return view
+
+        sources = result.get('sources', [])
+        fetch_by_step = {}
+        if any('evidence_status' not in source for source in sources):
+            fetches = session.scalars(select(ProviderCall).where(
+                ProviderCall.job_id == job.id, ProviderCall.endpoint == 'fetch',
+            ))
+            fetch_by_step = {call.step: call for call in fetches}
+
+        enriched = []
+        for source in sources:
+            status = source.get('evidence_status')
+            if status is None:
+                digest = sha256((source.get('url') or '').encode()).hexdigest()[:24]
+                fetch = fetch_by_step.get(f'fetch-{digest}')
+                if fetch is not None and fetch.status != 'succeeded':
+                    status = 'fetch_failed'
+                elif fetch is not None and fetch.estimated_milli_cny == 5:
+                    status = 'text_available'
+                else:
+                    status = 'summary_only' if source.get('summary') or source.get('snippet') else 'link_only'
+            enriched.append({**source, 'evidence_status': status})
+
+        lead = job.payload.get('lead', {})
+        subject = {field: lead.get(field) for field in ('name', 'location', 'role')}
+        view['result'] = {**result, 'sources': enriched, 'subject': subject}
+        return view

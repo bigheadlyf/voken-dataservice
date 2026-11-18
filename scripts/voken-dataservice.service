@@ -1,0 +1,24 @@
+[Unit]
+Description=Voken development API
+After=network.target mysqld.service
+Requires=mysqld.service
+
+[Service]
+Type=simple
+User=voken
+Group=voken
+WorkingDirectory=/opt/voken-dataservice/current
+EnvironmentFile=/etc/voken-dataservice/app.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/voken-dataservice/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=180
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
