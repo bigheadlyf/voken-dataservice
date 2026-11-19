@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from hashlib import sha256
 from typing import Annotated, Literal
 
@@ -365,6 +365,36 @@ def job_leads(job_id: str, workspace: WorkspaceAccess, sessions: Sessions):
     with sessions() as session:
         job = get_job(session, workspace, job_id)
         return (job.result or {}).get('leads', [])
+
+
+class ProviderHttpLog(BaseModel):
+    id: str
+    step: str
+    endpoint: str
+    status: str
+    error: str | None
+    started_at: datetime | None
+    request: dict | None
+    response: dict | None
+
+
+@router.get('/jobs/{job_id}/provider-logs', summary='查询跨境魔方接口请求与返回日志',
+            response_model=list[ProviderHttpLog])
+def job_provider_logs(job_id: str, workspace: WorkspaceAccess, sessions: Sessions):
+    """读取本工作空间任务的上游调用日志，含脱敏请求、返回、HTTP 状态和耗时。
+
+    仅包含实际访问跨境魔方的调用；旧任务可能没有请求或返回正文。
+    JSON 正文最多保留 100000 字符预览，非 JSON 返回只记录类型与字节数。
+    """
+    with sessions() as session:
+        get_job(session, workspace, job_id)
+        calls = session.scalars(select(ProviderCall).where(
+            ProviderCall.job_id == job_id,
+            ProviderCall.endpoint.startswith('upkuajing_', autoescape=True),
+        ).order_by(ProviderCall.started_at, ProviderCall.id))
+        return [{'id': call.id, 'step': call.step, 'endpoint': call.endpoint, 'status': call.status,
+                 'error': call.error, 'started_at': call.started_at,
+                 'request': call.http_request, 'response': call.http_response} for call in calls]
 
 
 @router.post('/public-searches', status_code=202)

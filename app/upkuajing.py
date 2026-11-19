@@ -1,8 +1,10 @@
 from datetime import datetime, time, timedelta, timezone
+from time import monotonic
 
 import httpx
 
 from app.deepseek import ProviderError
+from app.provider_logging import record_http, safe_body
 
 
 ACCOUNT_ENDPOINT = '/agent/auth/info'
@@ -59,15 +61,29 @@ class Upkuajing:
         self.client.close()
 
     def _post(self, endpoint: str, payload: dict) -> dict:
+        started = monotonic()
+        record_http('request', {'method': 'POST', 'url': str(self.client.base_url.join(endpoint)),
+                                'body': safe_body(payload, (self.key,))})
         try:
             response = self.client.post(endpoint, json=payload, headers={'Authorization': f'Bearer {self.key}'})
+            try:
+                body = response.json()
+            except ValueError:
+                # Arbitrary HTML/text can echo credentials; only structured JSON is retained.
+                body = {'non_json': True, 'bytes': len(response.content)}
+            record_http('response', {'status_code': response.status_code,
+                                     'duration_ms': round((monotonic() - started) * 1000),
+                                     'body': safe_body(body, (self.key,))})
             response.raise_for_status()
         except httpx.HTTPStatusError as error:
             status = error.response.status_code
             codes = {401: 'upkuajing_invalid_credentials', 402: 'upkuajing_balance_low',
                      403: 'upkuajing_access_denied', 429: 'upkuajing_rate_limited'}
             raise ProviderError(codes.get(status, 'upkuajing_request_failed'), unknown_charge=status >= 500) from None
-        except httpx.RequestError:
+        except httpx.RequestError as error:
+            record_http('response', {'status_code': None,
+                                     'duration_ms': round((monotonic() - started) * 1000),
+                                     'error': type(error).__name__})
             raise ProviderError('upkuajing_response_unknown', unknown_charge=True) from None
         try:
             result = response.json()

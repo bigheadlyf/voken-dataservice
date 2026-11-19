@@ -3,8 +3,10 @@ const authForm = $("auth-form");
 const agentForm = $("agent-form");
 const customsForm = $("customs-form");
 const buyerForm = $("buyer-form");
+const chatForm = $("chat-form");
 const sessionKey = "voken-test-console-session";
 const state = {token: null, workspace: null, challenge: null, editing: null, jobs: [], selected: null, reports: new Map(), buyerMatch: null};
+const chat = {agent: null, conversation: null, turns: [], pending: null, busy: false, more: false, epoch: 0};
 const scenarios = {
   us: {name: "美国 LED 拓客", market: "美国", product: "LED", target_count: 10,
     instructions: "我是一家中国生产LED的工厂，需要找10家美国地区有LED采购需求的客户。"},
@@ -156,6 +158,8 @@ function setUser(login) {
   $("point-price").textContent = "";
   $("point-ledger").replaceChildren();
   $("agent-list").replaceChildren(element("p", "登录后查看数字员工。", "empty"));
+  resetChat();
+  $("chat-agent").replaceChildren(new Option("请先创建数字员工", ""));
   renderJobs();
 }
 
@@ -256,6 +260,8 @@ async function refreshAgents() {
   const currentToken = state.token;
   const agents = await api(workspace("/agents"));
   if (state.token !== currentToken) return;
+  await updateChatAgents(agents);
+  if (state.token !== currentToken) return;
   const list = $("agent-list");
   if (!agents.length) {
     list.replaceChildren(element("p", "暂无数字员工，可从左侧选择验收场景。", "empty"));
@@ -267,6 +273,11 @@ async function refreshAgents() {
     const actions = element("div", null, "buttons");
     const path = `/agents/${agent.id}`;
     actions.append(
+      button("对话", async () => {
+        await selectChatAgent(agent.id);
+        $("agent-chat").scrollIntoView({block: "start"});
+        $("chat-content").focus();
+      }),
       button("启动", async () => {
         const job = await api(workspace(`${path}/runs`), {method: "POST", key: newIdempotencyKey()});
         state.selected = job.id;
@@ -390,6 +401,12 @@ function renderJobs() {
 async function showJob(job) {
   const cached = job && state.reports.get(job.id);
   renderResult(cached || job);
+  if (["buyer_search", "buyer_profile", "buyer_contacts", "customs_verification"].includes(job?.operation)) {
+    const panel = element("section", null, "provider-logs");
+    panel.append(element("h3", "跨境魔方接口日志"), element("p", "正在读取请求与返回…", "muted"));
+    $("job-result").append(panel);
+    loadProviderLogs(job, panel);
+  }
   if (cached || !job?.result?.report) return;
 
   const token = state.token;
@@ -400,6 +417,34 @@ async function showJob(job) {
     if (state.selected === job.id) renderResult(detail);
   } catch (error) {
     if (state.token === token && state.selected === job.id) announce(error.message, true);
+  }
+}
+
+async function loadProviderLogs(job, panel) {
+  const token = state.token;
+  try {
+    const logs = await api(workspace(`/jobs/${job.id}/provider-logs`));
+    if (state.token !== token || state.selected !== job.id || !panel.isConnected) return;
+    panel.replaceChildren(element("h3", "跨境魔方接口日志"));
+    panel.append(button("刷新日志", () => loadProviderLogs(job, panel)));
+    if (!logs.length) panel.append(element("p", "暂无调用日志。任务可能尚未执行、未实际访问上游或属于历史任务。", "muted"));
+    for (const log of logs) {
+      const details = element("details");
+      details.open = true;
+      const response = log.response;
+      const status = {started: "请求中", succeeded: "成功", failed: "失败", unknown: "结果未知"}[log.status] || log.status;
+      details.append(element("summary", `${log.endpoint} · ${status} · HTTP ${response?.status_code ?? "—"} · ${response?.duration_ms ?? "—"} ms`));
+      details.append(element("p", `调用 ${log.id} · ${log.started_at || ""} UTC`, "muted"));
+      if (log.error) details.append(element("p", `错误：${log.error}`));
+      details.append(element("h4", "请求"), element("pre", JSON.stringify(log.request, null, 2) || "暂无请求记录"),
+        element("h4", "返回"), element("pre", response ? JSON.stringify(response, null, 2) : "尚未收到返回，或旧任务未记录原始返回。"));
+      panel.append(details);
+    }
+  } catch (error) {
+    if (state.token === token && panel.isConnected) {
+      panel.replaceChildren(element("h3", "跨境魔方接口日志"), element("p", `日志读取失败：${error.message}`),
+        button("重试", () => loadProviderLogs(job, panel)));
+    }
   }
 }
 
@@ -656,7 +701,7 @@ setInterval(async () => {
   }
 }, 2500);
 
-api("/health").then((health) => {
+api(new URL("health", window.location.href).pathname).then((health) => {
   $("api-status").textContent = health.database_configured ? "API 与数据库已配置" : "API 在线 · 数据库未配置";
   $("provider-status").textContent = health.deepseek_configured ? "DeepSeek 已配置" : "DeepSeek 未配置";
   $("provider-status").classList.toggle("unavailable", !health.deepseek_configured);
@@ -671,3 +716,182 @@ api("/health").then((health) => {
 });
 
 perform(null, restoreSession);
+
+function resetChat() {
+  chat.epoch += 1;
+  Object.assign(chat, {agent: null, conversation: null, turns: [], pending: null, busy: false, more: false});
+  chatForm.reset();
+  $("chat-conversation").replaceChildren(new Option("新会话", ""));
+  $("chat-api-output").textContent = "尚未发送请求。";
+  renderChat();
+}
+
+function syncChatControls() {
+  $("chat-controls").disabled = !state.token || chat.busy;
+  const running = chat.turns.some((turn) => turn.status === "running");
+  $("chat-send").disabled = !chat.agent || Boolean(chat.pending) || running;
+  $("chat-refresh").disabled = !chat.agent;
+  $("chat-new").disabled = !chat.agent;
+  $("chat-earlier").disabled = !chat.more || !chat.conversation;
+  $("chat-retry").hidden = !chat.pending || chat.busy;
+  $("chat-status").textContent = chat.busy ? "正在处理，请等待模型与工具响应…" :
+    !state.token ? "登录后选择数字员工" : !chat.agent ? "请先创建数字员工" :
+    chat.pending ? "请求未确认，可使用原 key 重试" : running ? "对话处理中，可刷新查看" :
+    chat.conversation ? `会话 ${chat.conversation.slice(0, 8)}` : "新会话 · 发送后创建";
+}
+
+function renderChat() {
+  const nodes = chat.turns.map((turn) => {
+    const article = element("article", null, "chat-turn");
+    article.append(element("h3", "你"), element("p", turn.content, "chat-user"),
+      element("h3", `数字员工 · ${turn.status === "running" ? "处理中" : turn.status === "failed" ? "对话失败" : "对话完成"}`));
+    if (turn.response) article.append(element("p", turn.response, "chat-reply"));
+    if (turn.error) article.append(element("p", `${errorLabels[turn.error] || turn.error}。已执行的操作请查看下方工具记录。`, "chat-error"));
+    for (const call of turn.tool_calls ?? []) {
+      const details = element("details");
+      details.append(element("summary", `${call.name} · ${call.status === "succeeded" ? "调用成功" : call.status === "failed" ? "调用失败" : "调用中"}`),
+        element("pre", JSON.stringify(call, null, 2)));
+      article.append(details);
+      const job = call.result;
+      if (job?.id && job.operation) {
+        const actions = element("div", null, "buttons");
+        actions.append(button(`查看${operationLabels[job.operation] || "业务"}任务 · ${jobLabels[job.status] || job.status}`, async () => {
+          state.selected = job.id;
+          await Promise.all([refreshJobs(), refreshPoints()]);
+          if (!state.jobs.some((item) => item.id === job.id)) {
+            await showJob(await api(workspace(`/jobs/${job.id}`)));
+          }
+          $("runs").scrollIntoView({block: "start"});
+        }));
+        article.append(actions);
+      }
+    }
+    return article;
+  });
+  $("chat-messages").replaceChildren(...(nodes.length ? nodes : [element("p", "选择员工后，可通过对话安排任务、修改配置或测试记忆。", "empty")]));
+  syncChatControls();
+}
+
+async function updateChatAgents(agents) {
+  $("chat-agent").replaceChildren(...(agents.length ? agents.map((agent) => new Option(agent.config.name, agent.id)) : [new Option("请先创建数字员工", "")]));
+  if (agents.some((agent) => agent.id === chat.agent)) {
+    $("chat-agent").value = chat.agent;
+    return;
+  }
+  resetChat();
+  if (agents.length) await selectChatAgent(agents[0].id);
+}
+
+async function selectChatAgent(agentId) {
+  if (chat.agent === agentId) return;
+  if (chat.busy) throw new Error("当前消息正在处理，请稍后切换员工。");
+  resetChat();
+  chat.agent = agentId || null;
+  $("chat-agent").value = agentId;
+  syncChatControls();
+  if (chat.agent) await refreshChat();
+}
+
+async function refreshChat({earlier = false, inspect = false} = {}) {
+  if (!state.token || !chat.agent) return;
+  const epoch = chat.epoch;
+  const agent = chat.agent;
+  const conversation = chat.conversation;
+  const path = workspace(`/agents/${agent}/conversations`);
+  const conversations = await api(path);
+  if (epoch !== chat.epoch) return;
+  $("chat-conversation").replaceChildren(new Option("新会话", ""), ...conversations.map((item) =>
+    new Option(`${new Date(item.created_at).toLocaleString("zh-CN")} · ${item.id.slice(0, 8)}`, item.id)));
+  // A newly submitted conversation can be outside the most recent list page.
+  if (conversation && !conversations.some((item) => item.id === conversation)) {
+    $("chat-conversation").append(new Option(`当前会话 · ${conversation.slice(0, 8)}`, conversation));
+  }
+  $("chat-conversation").value = conversation || "";
+  if (inspect) $("chat-api-output").textContent = JSON.stringify({request: {method: "GET", path}, response: conversations}, null, 2);
+  if (conversation) {
+    const before = earlier && chat.turns.length ? `&before=${encodeURIComponent(chat.turns[0].id)}` : "";
+    const messagePath = workspace(`/agents/${agent}/conversations/${conversation}/messages?limit=50${before}`);
+    const turns = await api(messagePath);
+    if (epoch !== chat.epoch || conversation !== chat.conversation) return;
+    chat.turns = earlier ? [...turns, ...chat.turns] : turns;
+    chat.more = turns.length === 50;
+    if (inspect) $("chat-api-output").textContent = JSON.stringify({request: {method: "GET", path: messagePath}, response: turns}, null, 2);
+  }
+  renderChat();
+}
+
+async function sendChat(pending) {
+  if (chat.busy) return;
+  const epoch = chat.epoch;
+  const token = state.token;
+  chat.pending = pending;
+  chat.busy = true;
+  syncChatControls();
+  $("chat-api-output").textContent = JSON.stringify({request: pending, response: "等待响应"}, null, 2);
+  try {
+    const turn = await api(pending.path, {method: "POST", key: pending.key, body: pending.body});
+    if (epoch !== chat.epoch || token !== state.token) return;
+    chat.pending = null;
+    chat.conversation = turn.conversation_id;
+    chat.turns = [...chat.turns.filter((item) => item.id !== turn.id), turn];
+    chatForm.reset();
+    $("chat-api-output").textContent = JSON.stringify({request: pending, response: turn}, null, 2);
+    renderChat();
+    $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+    // These reads cannot cause the message to be retried if a refresh fails.
+    await Promise.all([refreshAgents(), refreshJobs(), refreshPoints(), refreshChat()]);
+  } catch (error) {
+    if (epoch === chat.epoch && token === state.token) {
+      if (chat.pending) $("chat-api-output").textContent = JSON.stringify({request: pending, error: error.message}, null, 2);
+      announce(error.message, true);
+    }
+  } finally {
+    if (epoch === chat.epoch) {
+      chat.busy = false;
+      syncChatControls();
+    }
+  }
+}
+
+$("chat-agent").addEventListener("change", (event) => perform(null, () => selectChatAgent(event.target.value)));
+$("chat-conversation").addEventListener("change", (event) => {
+  chat.epoch += 1;
+  chat.conversation = event.target.value || null;
+  Object.assign(chat, {turns: [], pending: null, more: false});
+  renderChat();
+  perform(null, () => refreshChat({inspect: true}));
+});
+$("chat-new").addEventListener("click", () => {
+  chat.epoch += 1;
+  Object.assign(chat, {conversation: null, turns: [], pending: null, more: false});
+  $("chat-conversation").value = "";
+  chatForm.reset();
+  renderChat();
+  $("chat-content").focus();
+});
+$("chat-refresh").addEventListener("click", () => perform(null, () => refreshChat({inspect: true})));
+$("chat-earlier").addEventListener("click", () => perform(null, () => refreshChat({earlier: true, inspect: true})));
+$("chat-examples").addEventListener("click", (event) => {
+  const example = event.target.closest("[data-message]");
+  if (!example) return;
+  $("chat-content").value = example.dataset.message;
+  $("chat-paid").checked = false;
+  $("chat-content").focus();
+});
+$("chat-retry").addEventListener("click", () => { if (chat.pending) sendChat(chat.pending); });
+chatForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!chat.agent || chat.pending || chat.busy || chat.turns.some((turn) => turn.status === "running")) return;
+  const content = $("chat-content").value.trim();
+  if (!content) return;
+  sendChat({method: "POST", path: workspace(`/agents/${chat.agent}/messages`), key: newIdempotencyKey(),
+    body: {content, ...(chat.conversation ? {conversation_id: chat.conversation} : {}), confirm_paid: $("chat-paid").checked}});
+});
+
+let chatPolling = false;
+setInterval(async () => {
+  if (chatPolling || chat.busy || !state.token || !chat.turns.some((turn) => turn.status === "running")) return;
+  chatPolling = true;
+  try { await refreshChat(); } catch { /* The manual refresh shows any error. */ }
+  finally { chatPolling = false; }
+}, 2500);

@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from app.db import Job, ProviderCall, utcnow, write_transaction
 from app.deepseek import ProviderError
 from app.pipeline import execute_pipeline
+from app.provider_logging import observe_http
 from app.workspaces import finish_job, has_deliverable, lock_workspace
 
 
@@ -81,8 +82,14 @@ class JobRun:
             session.add(call)
             session.flush()
 
+        def save_http(event, data):
+            with write_transaction(self.sessions) as session:
+                recorded = session.get(ProviderCall, call.id)
+                setattr(recorded, f'http_{event}', data)
+
         try:
-            result = invoke(*args)
+            with observe_http(save_http):
+                result = invoke(*args)
         except ProviderError as error:
             with write_transaction(self.sessions) as session:
                 recorded = session.get(ProviderCall, call.id)

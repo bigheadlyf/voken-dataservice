@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>微元 · 服务端测试台</title>
-  <link rel="stylesheet" href="/test-assets/styles.css">
-  <script src="/test-assets/console.js?v=20261118-uuid" defer></script>
+  <link rel="stylesheet" href="test-assets/styles.css?v=20261118-api-prefix">
+  <script src="test-assets/console.js?v=20261118-api-prefix" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="shell nav">
-      <a class="brand" href="/">微元 <span>服务端测试台</span></a>
-      <nav aria-label="页面导航"><a href="#employees">数字员工</a><a href="#runs">任务</a><a href="/docs">接口文档 ↗</a></nav>
+      <a class="brand" href="./">微元 <span>服务端测试台</span></a>
+      <nav aria-label="页面导航"><a href="#employees">数字员工</a><a href="#agent-chat">员工对话</a><a href="#runs">任务</a><a href="docs">接口文档 ↗</a></nav>
     </div>
   </header>
   <main class="shell">
@@ -56,6 +56,33 @@
         </form>
         <div id="agent-list" class="items"><p class="empty">登录后查看数字员工。</p></div>
       </div>
+    </section>
+
+    <section class="panel" id="agent-chat" aria-labelledby="chat-title">
+      <div class="section-title"><h2 id="chat-title">数字员工对话 · API 测试</h2><span id="chat-status" class="muted" role="status">登录后选择数字员工</span></div>
+      <fieldset id="chat-controls" data-auth disabled>
+        <div class="fields two">
+          <label>对话员工<select id="chat-agent"><option value="">请先创建数字员工</option></select></label>
+          <label>会话<select id="chat-conversation"><option value="">新会话</option></select></label>
+        </div>
+        <div class="buttons"><button id="chat-new" type="button" class="secondary">新会话</button><button id="chat-refresh" type="button" class="secondary">刷新会话与消息</button><button id="chat-earlier" type="button" class="text-button" disabled>加载更早消息</button></div>
+        <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"><p class="empty">选择员工后，可通过对话安排任务、修改配置或测试记忆。</p></div>
+        <form id="chat-form">
+          <label>消息<textarea id="chat-content" name="content" rows="3" maxlength="8000" placeholder="将目标市场改为美国，产品设为 LED，帮我找 10 个采购商" required></textarea></label>
+          <div id="chat-examples" class="buttons chat-examples">
+            <button type="button" class="secondary" data-message="读取你的当前配置，告诉我目标市场和产品。">读取配置</button>
+            <button type="button" class="secondary" data-message="将目标市场改为美国，产品设为 LED，线索数量改为 10。">修改配置</button>
+            <button type="button" class="secondary" data-message="按照当前配置提交一次拓客任务。">安排任务</button>
+            <button type="button" class="secondary" data-message="查询最近任务的进度和结果。">任务进度</button>
+            <button type="button" class="secondary" data-message="记住：我的销售偏好是优先寻找美国的 LED 采购商。">记住偏好</button>
+            <button type="button" class="secondary" data-message="读取你为我保存的全部长期记忆。">读取记忆</button>
+            <button type="button" class="secondary" data-message="删除你为我保存的销售偏好记忆。">删除记忆</button>
+          </div>
+          <div class="buttons"><label class="consent"><input id="chat-paid" name="confirm_paid" type="checkbox">仅本条消息确认付费增强查询。</label><button id="chat-send" type="submit" disabled>发送消息</button><button id="chat-retry" type="button" class="secondary" hidden>按原 key 重试</button></div>
+          <p class="muted chat-hint">会话调用模型；拓客等业务任务按原规则预占点数并在后台执行。“记住偏好”后可新建会话，再“读取记忆”验证跨会话保留。刷新页面后从会话列表继续。</p>
+        </form>
+      </fieldset>
+      <details id="chat-api-details"><summary>本次请求与原始响应</summary><pre id="chat-api-output">尚未发送请求。</pre></details>
     </section>
 
     <section class="panel" id="buyer" aria-labelledby="buyer-title">

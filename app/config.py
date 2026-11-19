@@ -11,6 +11,8 @@ BILLABLE_OPERATIONS = frozenset({'prospecting', 'public_search', 'report', 'cust
 @dataclass(frozen=True)
 class Settings:
     environment: str = 'production'
+    web_prefix: str = ''
+    cors_allow_origins: tuple[str, ...] = ('*',)
     database_url: str | None = None
     llm_api_key: str | None = field(default=None, repr=False)
     llm_model: str = 'deepseek-flash'
@@ -25,6 +27,8 @@ class Settings:
     fetch_calls_per_job: int = 5
 
     def __post_init__(self) -> None:
+        if self.web_prefix and (not self.web_prefix.startswith('/') or self.web_prefix.endswith('/') or any(char not in '/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for char in self.web_prefix)):
+            raise ValueError('WEB_PREFIX must be an absolute URL path without a trailing slash')
         if self.database_url and not self.database_url.startswith('mysql+pymysql://'):
             if self.environment != 'test' or not self.database_url.startswith('sqlite'):
                 raise ValueError('DATABASE_URL must use mysql+pymysql outside SQLite tests')
@@ -50,6 +54,11 @@ class Settings:
         max_agents = os.getenv('MAX_AGENT_INSTANCES')
         return cls(
             environment=os.getenv('APP_ENV', 'production'),
+            web_prefix=os.getenv('WEB_PREFIX', ''),
+            cors_allow_origins=tuple(
+                origin.strip() for origin in os.getenv('CORS_ALLOW_ORIGINS', '*').split(',')
+                if origin.strip()
+            ),
             database_url=os.getenv('DATABASE_URL'),
             llm_api_key=os.getenv('LLM_API_KEY'),
             llm_model=os.getenv('LLM_MODEL', 'deepseek-flash'),

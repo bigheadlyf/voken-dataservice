@@ -282,6 +282,18 @@ class ServiceTest(TestCase):
         self.assertEqual(result['result']['customs']['reported_milli_cny'], 1500)
         self.assertEqual(result['points_charged'], 1)
 
+        logs_path = root + '/jobs/' + job['id'] + '/provider-logs'
+        logs = self.client.get(logs_path, headers=token).json()
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0]['request']['body']['buyerCountryCodes'], ['RU'])
+        self.assertEqual(logs[0]['response']['body']['requestId'], 'fixture-request')
+        self.assertEqual(logs[0]['response']['status_code'], 200)
+        self.assertGreaterEqual(logs[0]['response']['duration_ms'], 0)
+        self.assertNotIn('fixture-secret', str(logs))
+        self.assertEqual(self.client.get(logs_path).status_code, 401)
+        _, other_token = self.register_and_login('13800000009')
+        self.assertEqual(self.client.get(logs_path, headers=other_token).status_code, 404)
+
         second_headers = dict(token, **{'Idempotency-Key': 'another-trade'})
         next_job = self.client.post(path, headers=second_headers, json=dict(body, confirm_paid=True)).json()
         self.assertTrue(worker.run_next())
@@ -399,11 +411,24 @@ class DeepSeekTest(TestCase):
 
 
 class TestConsoleTest(TestCase):
+    def test_prefixed_console_docs_and_health_keep_business_routes(self):
+        with TestClient(create_app(settings=Settings(environment='test', web_prefix='/api'))) as client:
+            self.assertEqual(client.get('/api/').status_code, 200)
+            self.assertEqual(client.get('/api/test-assets/console.js').status_code, 200)
+            self.assertEqual(client.get('/api/health').json()['status'], 'ok')
+            docs = client.get('/api/docs')
+            self.assertEqual(docs.status_code, 200)
+            self.assertIn('/api/openapi.json', docs.text)
+            schema = client.get('/api/openapi.json').json()
+            self.assertIn('/api/v1/auth/login', schema['paths'])
+            self.assertNotIn('/api/api/v1/auth/login', schema['paths'])
+            self.assertEqual(client.get('/health').status_code, 404)
+
     def test_console_is_served_only_in_test_mode(self):
         with TestClient(create_app(settings=Settings(environment='test'))) as client:
             response = client.get('/')
             self.assertEqual(response.status_code, 200)
-            self.assertIn('/test-assets/console.js', response.text)
+            self.assertIn('test-assets/console.js', response.text)
             self.assertEqual(client.get('/test-assets/console.js').status_code, 200)
             self.assertEqual(client.get('/test-assets/styles.css').status_code, 200)
             self.assertFalse(client.get('/health').json()['deepseek_configured'])
