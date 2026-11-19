@@ -434,5 +434,14 @@ class TestConsoleTest(TestCase):
             self.assertFalse(client.get('/health').json()['deepseek_configured'])
 
         with TestClient(create_app(settings=Settings(environment='production'))) as client:
-            self.assertEqual(client.get('/').status_code, 404)
+            response = client.get('/', follow_redirects=False)
+            self.assertEqual(response.status_code, 307)
+            self.assertEqual(response.headers['location'], '/docs')
+            self.assertEqual(client.get('/').status_code, 200)
             self.assertEqual(client.get('/test-assets/console.js').status_code, 404)
+
+        with TestClient(create_app(settings=Settings(environment='production', web_prefix='/api'))) as client:
+            response = client.get('/api/', follow_redirects=False)
+            self.assertEqual(response.status_code, 307)
+            self.assertEqual(response.headers['location'], '/api/docs')
+            self.assertEqual(client.get('/api/').status_code, 200)

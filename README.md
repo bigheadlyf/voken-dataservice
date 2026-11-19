@@ -26,6 +26,16 @@
    python -m uvicorn app.main:app --workers 1
    ```
 
+## Vercel 部署
+
+仓库通过 `vercel.json` 指定 FastAPI 框架，并通过 `pyproject.toml` 指定 `app.main:app` 入口。在 Vercel 项目中将 Root Directory 设为仓库根目录，Production Branch 设为 `master`；清除原有静态站点的 Build Command 和 Output Directory 覆盖设置，再重新部署。
+
+默认 `APP_ENV=production`，首页跳转到 `/docs`；通过 `/health` 检查服务，通过 `/openapi.json` 获取接口定义。设置 `WEB_PREFIX` 时这些入口增加对应前缀。测试台仅在 `APP_ENV=test` 时提供。
+
+在 Vercel 环境变量中配置可从部署环境访问的 MySQL `DATABASE_URL`、`LLM_API_KEY` 等必要参数；本地 `.env` 不会随 Git 上传。数据库需先从可访问数据库的环境执行 `python -m alembic upgrade head`。未配置数据库时，健康检查和文档仍可访问，业务接口会返回不可用。
+
+当前实现使用应用生命周期中的常驻 Worker 消费任务，并在启动时恢复任务状态，要求单进程运行。Vercel Functions 会自动伸缩，不能直接满足这一运行假设；完整拓客、报告及海关查询服务应部署到常驻单进程服务器，或先改造为独立 Worker / 持久队列架构。Vercel 上 HTTP 入口可用不代表后台业务任务可可靠完成。
+
 ## 首条业务链路
 
 API 默认允许所有来源跨域访问，支持 OPTIONS 预检以及 `Authorization`、`Content-Type`、`Idempotency-Key` 等请求头。通过 `CORS_ALLOW_ORIGINS` 设置允许的来源，多个来源以英文逗号分隔，例如 `https://app.example.com,http://localhost:5173`；来源须包含协议和端口（如有），不含路径或末尾斜杠。设为空值时不允许跨域来源。修改后需重启服务。前端使用 Bearer token 鉴权，不要设置 `credentials: 'include'`；服务不启用跨域 Cookie 凭据。

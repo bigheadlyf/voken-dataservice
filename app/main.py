@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import auth, chat, company, customers, workspaces
@@ -108,6 +108,10 @@ def create_app(
         @application.get(f'{prefix}/', include_in_schema=False)
         def test_console():
             return FileResponse(assets / 'index.html', headers={'Cache-Control': 'no-store'})
+    else:
+        @application.get(f'{prefix}/', include_in_schema=False)
+        def documentation_index():
+            return RedirectResponse(url=f'{prefix}/docs')
 
     install_openapi(application, routers=(auth.router, workspaces.router, chat.router))
     return application
