@@ -25,7 +25,8 @@ class OpenAPIContractTest(TestCase):
                     if '204' in operation['responses']:
                         self.assertNotIn('content', success)
                     else:
-                        self.assertTrue(success['content']['application/json']['schema'])
+                        media = 'text/csv' if path.endswith('/export.csv') else 'application/json'
+                        self.assertTrue(success['content'][media]['schema'])
                     if 'requestBody' in operation:
                         for content in operation['requestBody']['content'].values():
                             self.assertTrue(content['examples'])

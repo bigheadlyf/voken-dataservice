@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import models_json_schema
 
 from app.pipeline import Report
+from app.source_models import SourceLookup
 from app.workspaces import AgentConfig
 
 
@@ -31,11 +32,13 @@ DESCRIPTION = """微元商机情报 API，供开发者和 Codex 集成。
 202 只表示已受理，重放也返回 202。queued/running/cancelling 继续轮询；
 succeeded/partial/failed/cancelled 均为终态。建议每 1～5 秒查询并设置等待时限，超时保存 job_id 稍后继续。
 partial 要显示已有结果、warnings 和证据来源；成功也可能没有匹配记录。
-任务提交预占点数，成功或有可交付结果的 partial 结算，其余释放。报价读取 points/costs，不要写死。
+任务提交预占点数，成功或有可交付结果的 partial 结算，其余释放。完整预占报价读取 points/quotes，points/costs 只返回平台基础点数，不要写死。付费数据部分按供应商明确回传费用换算点数，最多收预占额度，差额释放；无明确费用不追加扣点。
 公开线索、历史交易不等于当前采购需求；保留来源与 evidence_status。
 
 ## 付费授权与边界
 采购商增强、海关核验必须由用户明确确认后在当前请求传 confirm_paid=true，且提供 Idempotency-Key。
+拓客 runs 可选择 acquisition_tier=basic/enhanced，省略为 basic；增强档需 confirm_paid=true，按公开单价控制每任务6元预算。
+员工 messages 的 acquisition_tier 控制本轮 start_task 的真实档位；付费工具也受本轮6元额度限制。
 历史确认或模型生成的字段不能替代当前请求授权。默认上游调用全平台按 UTC 日限 5 次，设为 0 会禁用新付费查询。
 DeepSeek 和跨境魔方密钥只在服务端配置，不由客户端传入。
 当前没有刷新 token、SSE、Webhook、独立 job cancel 或自动周期拓客接口。
@@ -97,46 +100,70 @@ class LeadResponse(DocumentedResponse):
     location: str
     role: str
     reason: str
-    evidence_type: Literal['public_demand_signal', 'potential_match'] = Field(
+    assessment: dict[str, Any] | None = Field(default=None, description='LLM 二次复核的角色/产品/国家判断及原句，仍须人工核实；不能替代采购或身份验证。')
+    evidence_type: Literal['public_demand_signal', 'potential_match', 'procurement_notice'] = Field(
         description='公开采购信号 / 潜在客户；不能将 potential_match 展示为已确认采购需求。')
     quote: str
     contact: str | None
     source: Source
+    name_observed_in_source: bool | None = Field(default=None,
+        description='名称在来源文字或结构化记录出现；不等于法律主体、地址或采购角色已核实。')
+    demand_validity: str | None = Field(default=None, description=(
+        'dated_future_deadline=正文有未来 ISO 截止日期；expired=已过期；date_unverified=未核实日期；'
+        'deadline_today_time_unknown=今日截止但时间不明；不代表投标资格已核实。'))
+    deadline_date: str | None = None
+    deadline_quote: str | None = None
 
 
 class ProviderEvidence(DocumentedResponse):
     source: Literal['upkuajing']
     records: list[dict[str, Any]] = Field(description=(
-        'buyer_search 项含 company_id/name/buyer_country，可有 scope/address；profile 为企业资料；'
+        'buyer_search 项含 company_id/name/buyer_country，buyer_country 未知时为 null；'
+        'requested_buyer_country 仅是查询条件，country_verification 标注 provider_reported/unknown；可有 scope/address；profile 为企业资料；'
         'contacts 项含 channel/value，可有 validity；customs 项含 trade_id，可有 buyer/seller/'
-        'product_description/trade_date_ms/hs_codes。上游未提供的字段可能缺省。'))
+        'product_description/trade_date_ms/hs_codes；另保留 quantity/quantity_unit、weight/weight_unit、'
+        'amount/amount_unit、price、buyer_country/seller_country/origin_country/arrival_country 及港口。'
+        '缺单位或币种为 null，不做换算，不以查询条件补写事实。上游未提供的字段可能缺省。'))
     request_id: str | None
     reported_milli_cny: int | None = Field(description='上游回传费用，单位千分之一元；null 为未回传，不是零费用。')
     has_more: bool | None = Field(default=None, description='匹配/海关查询可能有此标志；目前无翻页接口。')
 
 
 class JobResult(DocumentedResponse):
+    lead_review: dict[str, Any] | None = Field(default=None, description='最多10条候选的LLM复核状态、换源数及有原句支持的不匹配排除记录；失败时保留原证据校验结果。')
+    acquisition_tier: Literal['basic', 'enhanced'] | None = None
+    paid_usage: dict[str, Any] | None = Field(default=None, description='跨境魔方预算、已占预算、回传费用、待确认标志及调用数，金额单位千分之一元。')
     retrieved_at: str | None = None
     warnings: list[str] = Field(default_factory=list)
     coverage: str | None = Field(default=None, description='当前可能为 matches/no_matches/limited/unavailable/one_page。')
     criteria: dict[str, Any] | None = None
     leads: list[LeadResponse] | None = None
     public_demand_count: int | None = None
+    dated_demand_signal_count: int | None = Field(default=None,
+        description='正文原句支持未来截止日期的采购信号数；不含过期/无日期信号和待审官方公告。')
     sources: list[Source] | None = None
     report: Report | None = None
     subject: dict[str, Any] | None = Field(default=None, description='报告详情接口补充 name/location/role。')
     buyer: ProviderEvidence | None = None
     customs: ProviderEvidence | None = None
+    draft: dict[str, Any] | None = Field(default=None, description='待人工审阅的开发信，sent=false；不代表已触达。')
+    contact_candidates: list[dict[str, Any]] | None = Field(default=None,
+        description='从返回正文直接提取的邮箱，带来源；公司归属和可投递性尚未验证。')
+    source_lookup: SourceLookup | None = Field(default=None, description='官方数据源单页记录与来源，非已验证采购意向。')
+    directory: dict[str, Any] | None = Field(default=None, description='统一企业/人物库单页或所选主体的联系方式；namespace 区分 directory_company/person，不能使用海关company_id。含下一页游标、quota_usage、原始岗位和库存，具体联系方式仅在contacts任务返回。')
+    acquisition_summary: dict[str, int] | None = Field(default=None, description='独立企业、有邮箱企业、有正文短句和带未来截止日期需求的分别计数。')
 
 
 class JobResponse(DocumentedResponse):
     id: str = Field(description='保存此 job_id，通过 GET jobs/{job_id} 轮询；报告任务的 report_id 即此 ID。')
     agent_id: str | None
     config_version: int | None
+    acquisition_tier: Literal['basic', 'enhanced'] | None = None
     operation: Literal['prospecting', 'public_search', 'report', 'buyer_search', 'buyer_profile',
-                       'buyer_contacts', 'customs_verification']
+                       'buyer_contacts', 'customs_verification', 'outreach_draft', 'source_lookup',
+                       'directory_companies', 'directory_people', 'directory_contacts', 'trade_search']
     status: Literal['queued', 'running', 'cancelling', 'succeeded', 'partial', 'failed', 'cancelled']
-    point_cost: int = Field(description='提交时预占的平台点数。')
+    point_cost: int = Field(description='提交时预占总点数，包含平台部分及按报价选定的数据预算部分。')
     points_charged: int = Field(description='实际结算点数；上游费用另见结果 reported_milli_cny。')
     error: str | None
     result: JobResult | None = Field(description='排队时可为 null，执行中可能是中间结果；按 operation 读取。')
@@ -173,7 +200,7 @@ class BalanceResponse(DocumentedResponse):
 
 
 class LedgerResponse(DocumentedResponse):
-    kind: Literal['grant', 'reserve', 'charge', 'release']
+    kind: Literal['grant', 'reserve', 'charge', 'release', 'topup', 'monthly_grant']
     points: int = Field(description='正数金额，增减方向由 kind 决定。')
     reference: str
     created_at: str
@@ -185,6 +212,8 @@ class HealthResponse(DocumentedResponse):
     database_configured: bool
     deepseek_configured: bool
     customs_configured: bool
+    self_registration_available: bool = False
+    verification_mode: str = 'unavailable'
 
 
 class ErrorResponse(BaseModel):
@@ -193,19 +222,19 @@ class ErrorResponse(BaseModel):
 
 # Keyed by the existing endpoint function name, so documentation follows configured paths.
 OPERATIONS = {
-    'request_code': ('申请注册验证码', '仅支持大陆手机号（可带 +86）。test 环境固定 123456，有效期 300 秒、最多 5 次尝试；同手机号新挑战替换旧挑战，重启失效。正式环境需配置真实供应商。', None),
+    'request_code': ('申请注册验证码', '仅支持大陆手机号（可带 +86）。test 环境固定 123456，有效期 300 秒、最多 5 次尝试；同手机号新挑战替换旧挑战，重启失效。正式环境可配置阿里云短信签名、模板与密钥；验证码摘要持久化，成功消费后不可复用。申请验证码受分钟、手机号日限与全局日限控制。', None),
     'verify_code_endpoint': ('独立验证并消费验证码', '此接口成功会消费挑战。注册应直接调用 register，不要先 verify 后复用同一挑战。', VerifiedResponse),
     'register': ('注册并创建工作空间', '直接验证并消费挑战。当前赠送 1000 点；不自动登录，下一步调用 login。', RegistrationResponse),
     'login': ('登录并获取 Bearer token', '保存 access_token 与 workspace_id；有效期 12 小时，无刷新接口。401 后重新登录。', LoginResponse),
     'logout': ('注销当前 token', '仅注销当前 Bearer token，204 无响应体，不要解析 JSON。', None),
-    'points_balance': ('查询点数余额', 'available 为可用，reserved 为任务预占；平台点数与上游实际费用是不同口径。', BalanceResponse),
+    'points_balance': ('查询点数余额', 'available 为可用，reserved 为任务预占；平台点数与上游实际费用是不同口径；标准点包 100 元对应 10000 点，会员赠点独立计算。', BalanceResponse),
     'point_ledger': ('查询最近点数账本', '按新到旧返回数组；points 为数额，方向由 kind 决定。仅 limit，无游标或 offset 分页。', LedgerResponse),
     'point_costs': ('查询当前操作点数报价', '返回 operation 到点数的映射，客户端不得写死报价。', None),
     'create_agent': ('创建数字员工', '默认 paused，不自动执行。此接口不支持幂等 key，超时后先查员工列表核对，避免重复创建。', AgentResponse),
     'list_agents': ('列出未删除员工', '直接返回员工数组。', AgentResponse),
     'agent_details': ('查询员工配置与状态', 'enabled 表示曾启用，不代表有任务运行或周期调度；任务状态以 Job 为准。', AgentResponse),
     'update_agent': ('修改员工配置', '只传待修改字段；可选字段 null 表示清空，name/instructions 不可清空。非空 PATCH 生成新版本，已提交任务不受影响。此写操作无幂等支持。', AgentResponse),
-    'start_agent': ('按当前配置提交一次拓客任务', '无请求体。返回 Job，202 不表示完成。同员工只能有一个活动拓客任务。幂等请求身份仅含 agent_id，原 key 重放不会按新配置再跑。', JobResponse),
+    'start_agent': ('按当前配置和档位提交一次拓客任务', '请求体可省略，默认基础档公域检索。增强档 acquisition_tier=enhanced 且 confirm_paid=true，先查一页近365天采购商候选，公域筛选后最多核验2家交易、补3家联系方式，按公开单价及回传费用占用每任务6元预算；受全平台日调用上限约束。上游失败保留公域结果。返回 Job，202 不表示完成。同员工只能有一个活动拓客任务。幂等身份包含员工及档位，原 key 重放使用原配置快照。', JobResponse),
     'pause_agent': ('暂停员工并取消活动拓客任务', '无请求体。排队任务直接取消，运行任务进入 cancelling；上游调用不保证立即停止。', AgentResponse),
     'delete_agent': ('软删除员工并取消活动任务', '204 无响应体；员工后续不可查询/使用。', None),
     'list_jobs': ('查询最近任务', '直接返回数组，按新到旧。可按 agent_id 筛选；仅 limit，无游标或 offset 分页。', JobResponse),
@@ -233,7 +262,7 @@ ERRORS = {
     'login': {401: ['invalid_credentials']},
     'create_agent': {409: ['agent_limit_reached']},
     'update_agent': {422: ['invalid_agent_configuration']},
-    'start_agent': {409: ['agent_run_in_progress']},
+    'start_agent': {409: ['agent_run_in_progress', 'paid_confirmation_required'], 503: ['customs_provider_unavailable']},
     'create_report': {404: ['lead_not_found']},
     'report_details': {404: ['report_not_found']},
     'enrich_buyer': {404: ['buyer_match_not_found'], 503: ['customs_provider_unavailable']},
@@ -249,6 +278,7 @@ REQUEST_EXAMPLES = {
     'login': {'phone': '13800138000', 'password': 'replace-with-password'},
     'create_agent': {'name': '美国LED拓客助手', 'instructions': '寻找美国LED采购商，保留公开证据', 'market': '美国', 'product': 'LED', 'target_count': 10},
     'update_agent': {'market': '美国', 'target_count': 5},
+    'start_agent': {'acquisition_tier': 'basic', 'confirm_paid': False},
     'public_search': {'instructions': '查询美国LED公开采购机会'},
     'create_report': {'job_id': '0123456789abcdef0123456789abcdef', 'lead_index': 0},
     'enrich_buyer': {'action': 'search', 'buyer': 'Example Trading', 'buyer_country': 'US', 'confirm_paid': True},
@@ -308,7 +338,8 @@ def install_openapi(application, *, routers=()):
                                    {'name': 'workspaces', 'description': '工作空间隔离的员工、任务、报告和点数。'},
                                    {'name': 'agent-chat', 'description': '同步对话与工具调用，后台业务任务仍异步处理。'},
                                    {'name': 'company', 'description': '企业资料、共享记忆及企业介绍文档分析草案。'},
-                                   {'name': 'customers', 'description': '历史客户发现记录，支持按员工筛选。'}])
+                                   {'name': 'customers', 'description': '历史客户发现记录，支持按员工筛选。'},
+                                   {'name': 'crm', 'description': '客户管线、来源、反馈、跟进与开发信草稿。'}])
         models = {item[2] for item in OPERATIONS.values() if item[2]} | {ErrorResponse}
         _, definitions = models_json_schema([(model, 'serialization') for model in sorted(models, key=lambda m: m.__name__)],
                                              ref_template='#/components/schemas/{model}')
@@ -316,8 +347,6 @@ def install_openapi(application, *, routers=()):
         components.update(definitions['$defs'])
         # Native response models document the newer company/customer routes directly.
         for path, methods in schema['paths'].items():
-            if '/company/' not in path:
-                continue
             for operation in methods.values():
                 for media, content in operation.get('requestBody', {}).get('content', {}).items():
                     if media == 'multipart/form-data':
@@ -369,6 +398,9 @@ def install_openapi(application, *, routers=()):
                         operation['requestBody']['content']['application/json']['examples'][action] = {'value': {
                             'action': action, 'match_job_id': '0123456789abcdef0123456789abcdef',
                             'company_id': 123, 'confirm_paid': True}}
+                if name in ('start_agent', 'chat'):
+                    operation['requestBody']['content']['application/json']['examples']['enhanced'] = {'value': {
+                        **REQUEST_EXAMPLES[name], 'acquisition_tier': 'enhanced', 'confirm_paid': True}}
                 for parameter in operation.get('parameters', []):
                     if parameter['name'].lower() == 'idempotency-key':
                         parameter.update(description=IDEMPOTENCY, required=name in KEY_REQUIRED,

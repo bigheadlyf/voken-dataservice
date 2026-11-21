@@ -367,7 +367,7 @@ with httpx.Client(base_url=base, timeout=30.0) as api:
 
 记忆状态为 `unverified` 或 `confirmed`，默认未核实。更正正文后默认恢复未核实；只有调用方明确传 confirmed 才标记为已确认。PATCH 允许 title、content、verification_status 和 expected_version；字段不可设为 null。资料和记忆版本不匹配返回 `409 company_version_conflict`，重新读取后再操作。
 
-文档支持 UTF-8/GB18030 的 TXT、MD、DOCX 和文字型 PDF，最多 5 MiB、提取文本 60000 字符，PDF 最多 100 页。扫描 PDF 不支持 OCR，加密 PDF 不支持。原始文件不落库，提取文本发送给服务端配置的 LLM，草案及相关短引文保存在本工作空间。该分析同步返回，暂不扣平台点数，供应商模型可能计费；客户端需要足够长的响应超时，上传失败后不会自动采用任何事实。
+文档支持 UTF-8/GB18030 的 TXT、MD、DOCX 和文字型 PDF，最多 50 MiB（52,428,800 字节）、提取文本 60000 字符，PDF 最多 100 页。扫描 PDF 不支持 OCR，加密 PDF 不支持。原始文件不落库，提取文本发送给服务端配置的 LLM，草案及相关短引文保存在本工作空间。该分析同步返回，暂不扣平台点数，供应商模型可能计费；客户端需要足够长的响应超时，上传失败后不会自动采用任何事实。
 
 分析返回 `id`、`filename`、`proposal.profile`、`proposal.profile_evidence`、`proposal.memories`、`base_profile_version`、`created_at`、`applied_at`。每项记忆带原文 evidence，导入后一律为未核实；引用原文只能证明来自该文档，不能证明外部真实性。前端先展示草案供检查，再调用 apply。若只需部分字段，调用资料/记忆 CRUD 保存选定项，不调用整份 apply。
 
@@ -377,5 +377,31 @@ with httpx.Client(base_url=base, timeout=30.0) as api:
 
 历史客户接口返回 `{items: [...], next_cursor: null或字符串}`，每项有 `id`、`agent_id`、`job_id`、`config_version`、`lead_index`、`lead`、`created_at`、`finished_at`。直接读取持久化且已终结的 prospecting 任务结果，无需重新跑任务或迁移旧线索；排除尚在运行的中间结果。按任务创建时间倒序，任务内序号升序。下一页携带原 agent_id 和 next_cursor，limit 为 1～100。更换 agent_id 后需从首页开始；非法游标返回 `422 invalid_customer_cursor`。
 
-这些是历史发现记录，同一企业在不同任务中可以重复出现；目前没有实现 CRM 合并、客户分配或邮件跟进。员工软删除后仍可按原 agent_id 查询，指定不存在或属于其他工作空间的 agent_id 返回空列表。客户详情保留原始 lead 中的来源、采购证据类型和联系方式，不将潜在匹配表述为已确认采购。
+这些是历史发现记录，同一企业在不同任务中可以重复出现；独立 CRM 可从这些发现记录人工保存并按名称和地区保守去重，支持跟进记录与开发信草稿；尚无客户分配和自动发信。员工软删除后仍可按原 agent_id 查询，指定不存在或属于其他工作空间的 agent_id 返回空列表。客户详情保留原始 lead 中的来源、采购证据类型和联系方式，不将潜在匹配表述为已确认采购。
 
+
+## AI 拓客工作台、CRM 与全球情报源（2026-11-21）
+
+业务页面为 `/app`。新增接口统一位于 `/api/v1/workspaces/{workspace_id}` 下，沿用 Bearer 登录、工作空间隔离、异步任务和点数账本。完整请求示例、版本冲突、周期执行与人工采用联系方式规则见[工作台运行手册](./AI拓客工作台运行手册.md)。
+
+原生 GLEIF、TED、世界银行采购和可配置的 Companies House 通过 `POST /sources/searches` 提交；其余来源为明确标识的限站搜索。查询须带 `Idempotency-Key`。真实接入范围和数据重用限制见[全球情报源目录](./全球公开情报源目录与接入策略-20261120.md)。公开可读页面不等于已购买该站整个数据库的转售权。
+
+发现结果新增 `name_observed_in_source`、`demand_validity`、`deadline_date` 等证据字段。模型引用必须匹配实际返回内容，公司名称也必须有来源支持；未核实与过期信号不会作为已验证、仍开放采购需求统计。官方采购公告保留自身类型，不直接计入普通网页需求计数。
+
+CRM 导出保留证据类型、期限与来源链接；`.eml` 是待审阅邮件文件，生成任务不会自动发信。供应商费用估算与平台点数分开显示，未定价的模型 token 不能当作零费用。
+
+## 注册、企业确认与付费接口补充（2026-11-21）
+
+注册、重置密码和改密均使用一次性验证码或当前密码；成功重置/改密撤销旧会话。企业名称、官网或介绍文件先形成可审阅草案，再采用并确认当前版本资料；独立资质和域名所有权未核实时不会标记通过。详情见[运行手册](./AI拓客工作台运行手册.md)。
+
+点数完整报价改用 `GET /points/quotes`，基础平台费仍可从 `points/costs` 读取。标准点包为 100 点/元，`points_per_100_cny=10000`；会员赠点不改变标准点包面值。任务 payload 固定保存当次报价，结算不受之后参数更改影响。数据费用仅采用供应商明确回传金额、向上取整到整点，封顶于预占数据点数；同一任务可能同时产生 charge 和 release，两项合计等于原预占。账本 kind 还包括 topup、monthly_grant。
+
+微信支付使用 Native APIv3 和公钥验签模式，商户配置缺失时保持关闭。没有“客户端模拟到账”接口。下单、查单、关单、签名通知及到账幂等的详细契约、配置项和接口路径均见运行手册支付章节。除真实资金支付外，订单报价、重复通知、错误金额/币种/商户、会员领取和账本变化均可在本地自动化测试中验证。
+
+## 统一企业、人员与联系方式（2026-11-21）
+
+新增工作空间级 `/directory/searches`、`/directory/contacts`、`/directory/trades`、`/directory/save-company`、`/directory/saved-contacts` 及 `/discovery/preview`、`/discovery/feedback`。企业与人员查询返回库存，实际值须选定主体另行解锁；同名企业不自动合并。付费查询须携带 `confirm_paid: true` 和 `Idempotency-Key`，结果通过 jobs 读取；分页仅引用自己的上一页 `continuation_job_id`。供应商 PLAN 金额 0 仍可能消耗配额。
+
+运行增强任务可传 `{"acquisition_tier":"enhanced","enhancement_goal":"contacts","confirm_paid":true}`，优先补前两家公域候选的企业联系方式；默认 enhancement_goal 为 trade。完整边界、路由和真实验收结果见[统一获客接入与优化验收](./跨境魔方统一获客接入与优化验收-20261121.md)。
+
+发现客户增加 `lead_review` 审计摘要及每条线索的 `assessment`（角色、产品、国家判断及原句）；最多复核10个候选，使用 analysis 模型场景，不取代来源校验。英国 `find_tender` / `contracts_finder` 已升级原生 OCDS：`POST /sources/searches` 可带 `procurement_stage: "tender" | "award" | "all"`，默认 tender，国家仅支持 GB 或不填。每次上游一页最多100条后本地匹配关键词，返回 `scanned_count`、`matched_in_page`、`search_scope`、`date_filter`；`total_reported=null`，不是全库关键词总数。新来源、真实接口对照和边界见[本次验收](./联系人接口对照与LLM-OSINT优化验收-20261121.md)。

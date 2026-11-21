@@ -22,7 +22,12 @@ const operationLabels = {prospecting: "拓客", public_search: "公域搜索", r
 const pointLabels = {grant: "注册赠送", reserve: "任务预占", charge: "任务扣点", release: "释放预占", refund: "退回扣点"};
 const errorLabels = {deepseek_read_timeout: "DeepSeek 响应超时，请稍后再试。",
   deepseek_connection_unavailable: "暂时无法连接 DeepSeek。",
-  deepseek_response_unknown: "未收到完整的 DeepSeek 响应。"};
+  deepseek_response_unknown: "未收到完整的 DeepSeek 响应。",
+  enhancement_budget_exhausted: "跨境魔方预算已用尽，已保留现有结果。",
+  enhancement_criteria_incomplete: "产品或目标国家待明确，本次已回退公域检索。",
+  upkuajing_daily_limit: "跨境魔方平台日调用额度已用尽，已保留现有结果。",
+  customs_provider_unavailable: "跨境魔方接口未配置或已禁用。",
+  paid_confirmation_required: "请选择增强档并确认当前请求的付费授权。"};
 
 function newIdempotencyKey() {
   if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
@@ -31,6 +36,10 @@ function newIdempotencyKey() {
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function chatAcquisitionTier() {
+  return $("chat-tier")?.value || ($("chat-paid")?.checked ? "enhanced" : "basic");
 }
 
 function element(tag, value, className) {
@@ -271,6 +280,11 @@ async function refreshAgents() {
     const entry = element("article", null, "entry");
     entry.append(element("h3", agent.config.name), element("p", `${agent.status === "paused" ? "暂停" : "启用"} · 配置 v${agent.config_version} · ${agent.config.market || "未指定市场"}`, "muted"));
     const actions = element("div", null, "buttons");
+    const tierLabel = element("label", "本次启动档位");
+    const tier = document.createElement("select");
+    tier.append(new Option("基础档 · 公域获客", "basic"), new Option("增强档 · 确认付费，预算 ¥6", "enhanced"));
+    tierLabel.append(tier);
+    entry.append(tierLabel);
     const path = `/agents/${agent.id}`;
     actions.append(
       button("对话", async () => {
@@ -279,7 +293,8 @@ async function refreshAgents() {
         $("chat-content").focus();
       }),
       button("启动", async () => {
-        const job = await api(workspace(`${path}/runs`), {method: "POST", key: newIdempotencyKey()});
+        const job = await api(workspace(`${path}/runs`), {method: "POST", key: newIdempotencyKey(),
+          body: {acquisition_tier: tier.value, confirm_paid: tier.value === "enhanced"}});
         state.selected = job.id;
         announce("任务已提交。");
         await Promise.all([refreshAgents(), refreshJobs(), refreshPoints()]);
@@ -401,7 +416,7 @@ function renderJobs() {
 async function showJob(job) {
   const cached = job && state.reports.get(job.id);
   renderResult(cached || job);
-  if (["buyer_search", "buyer_profile", "buyer_contacts", "customs_verification"].includes(job?.operation)) {
+  if (job?.acquisition_tier === "enhanced" || ["buyer_search", "buyer_profile", "buyer_contacts", "customs_verification"].includes(job?.operation)) {
     const panel = element("section", null, "provider-logs");
     panel.append(element("h3", "跨境魔方接口日志"), element("p", "正在读取请求与返回…", "muted"));
     $("job-result").append(panel);
@@ -449,6 +464,7 @@ async function loadProviderLogs(job, panel) {
 }
 
 function sourceLink(source) {
+  if (source?.provider === "upkuajing") return element("span", `跨境魔方 · 企业 ${source.company_id}`);
   if (!source?.url) return element("span", "无公开链接");
   try {
     const url = new URL(source.url);
@@ -463,7 +479,7 @@ function sourceLink(source) {
   }
 }
 
-const evidenceLabels = {text_available: "已获取正文", fetch_failed: "原文抓取失败",
+const evidenceLabels = {trade_summary: "历史贸易候选", text_available: "已获取正文", fetch_failed: "原文抓取失败",
   summary_only: "仅搜索摘要", link_only: "仅链接"};
 
 function reportText(node, value, citations) {
@@ -634,6 +650,13 @@ function renderResult(job) {
   const data = job.result || {};
   result.replaceChildren(element("h3", `${operationLabels[job.operation]} · ${jobLabels[job.status]}`),
     element("p", `预估 ${job.point_cost} 点 · 已扣 ${job.points_charged} 点`, "muted"));
+  if (job.operation === "prospecting") result.append(element("p", job.acquisition_tier === "enhanced" ? "增强档 · 跨境魔方与公域筛选" : "基础档 · 公域获客", "muted"));
+  if (data.paid_usage) {
+    const usage = data.paid_usage;
+    result.append(element("p", `跨境魔方预算 ¥${(usage.budget_milli_cny / 1000).toFixed(2)} · 已占预算 ¥${(usage.committed_milli_cny / 1000).toFixed(2)} · 已调用 ${usage.calls} 次${usage.has_unconfirmed_cost ? " · 部分费用待供应商确认" : ""}`, "muted"));
+  }
+  for (const warning of data.warnings || []) result.append(element("p", errorLabels[warning] || warning, "muted"));
+  if (data.criteria && data.leads) result.append(element("p", `线索 ${data.leads.length} 家 · 公开采购信号 ${data.public_demand_count || 0} 家 · 目标 ${data.criteria.target_count} 家`, "muted"));
   if (job.error) result.append(element("p", `错误：${errorLabels[job.error] || job.error}`));
   if (data.coverage === "limited") result.append(element("p", "当前证据覆盖有限。", "muted"));
   if (data.report) renderReport(result, data);
@@ -667,6 +690,13 @@ function renderResult(job) {
         await Promise.all([refreshJobs(), refreshPoints()]);
       }));
     result.append(row);
+    if (lead.quote) row.append(element("p", `原文依据：${lead.quote}`));
+    if (lead.contact) row.append(element("p", `公开联系方式：${lead.contact}`));
+    if (lead.company_id) row.append(element("p", `跨境魔方企业编号 ${lead.company_id} · 历史贸易候选`, "muted"));
+    if (lead.trade_evidence) row.append(element("p", `相关历史交易 ${lead.trade_evidence.records.length} 条${lead.trade_evidence.has_more ? "（供应商另有后续页）" : ""} · 当前需求请核对公开采购依据`, "muted"));
+    for (const contact of lead.business_contacts?.records || []) {
+      row.append(element("p", `${contact.channel} · ${contact.value} · ${contact.validity === 1 ? "供应商标记有效" : contact.validity === 2 ? "供应商标记无效" : "有效性待确认"}`));
+    }
   }
   if (data.sources?.length && !data.report) {
     const details = element("details");
@@ -875,7 +905,10 @@ $("chat-examples").addEventListener("click", (event) => {
   const example = event.target.closest("[data-message]");
   if (!example) return;
   $("chat-content").value = example.dataset.message;
-  $("chat-paid").checked = false;
+  const tier = $("chat-tier");
+  if (tier) tier.value = "basic";
+  const paid = $("chat-paid");
+  if (paid) paid.checked = false;
   $("chat-content").focus();
 });
 $("chat-retry").addEventListener("click", () => { if (chat.pending) sendChat(chat.pending); });
@@ -884,8 +917,10 @@ chatForm.addEventListener("submit", (event) => {
   if (!chat.agent || chat.pending || chat.busy || chat.turns.some((turn) => turn.status === "running")) return;
   const content = $("chat-content").value.trim();
   if (!content) return;
+  const tier = chatAcquisitionTier();
   sendChat({method: "POST", path: workspace(`/agents/${chat.agent}/messages`), key: newIdempotencyKey(),
-    body: {content, ...(chat.conversation ? {conversation_id: chat.conversation} : {}), confirm_paid: $("chat-paid").checked}});
+    body: {content, ...(chat.conversation ? {conversation_id: chat.conversation} : {}),
+      acquisition_tier: tier, confirm_paid: tier === "enhanced"}});
 });
 
 let chatPolling = false;

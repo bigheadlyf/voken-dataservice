@@ -4,12 +4,14 @@ from hashlib import sha256
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
-from sqlalchemy import func, select
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from urllib.parse import urlsplit
+from sqlalchemy import func, select, or_
 
 from app.auth import session_factory, workspace_access
 from app.config import BILLABLE_OPERATIONS, BUYER_OPERATIONS
-from app.db import Agent, AgentVersion, Job, PointEntry, ProviderCall, Wallet, Workspace, utcnow, write_transaction
+from app.db import Agent, AgentSchedule, AgentVersion, Job, PointEntry, ProviderCall, Wallet, Workspace, utcnow, write_transaction
+from app.point_pricing import POINTS_PER_CNY,quote as point_quote
 
 
 router = APIRouter(prefix='/api/v1/workspaces/{workspace_id}', tags=['workspaces'])
@@ -28,6 +30,49 @@ class AgentConfig(BaseModel):
     product: str | None = Field(default=None, max_length=150)
     hs_code: str | None = Field(default=None, pattern=r'^[0-9]{6,10}$')
     target_count: int | None = Field(default=None, ge=1, le=30)
+    buyer_role: Literal['any', 'distributor', 'manufacturer', 'brand', 'service_provider', 'public_buyer'] = 'any'
+    seed_website: str | None = Field(default=None, max_length=500)
+    exclude_keywords: list[str] = Field(default_factory=list, max_length=20)
+    exclude_domains: list[str] = Field(default_factory=list, max_length=20)
+    reference_websites: list[str] = Field(default_factory=list, max_length=5)
+    public_sources: list[Literal['ted']] = Field(default_factory=list, max_length=1)
+
+    @field_validator('seed_website')
+    @classmethod
+    def seed_url(cls, value):
+        if value is None:
+            return value
+        try:
+            url = urlsplit(value)
+            if url.scheme in ('http', 'https') and url.hostname and not (url.username or url.password):
+                return value
+        except ValueError:
+            pass
+        raise ValueError('Seed website must be an HTTP(S) URL without embedded credentials')
+
+    @field_validator('exclude_keywords')
+    @classmethod
+    def exclusions(cls, values):
+        if any(not value.strip() or len(value) > 80 for value in values):
+            raise ValueError('Each exclusion must have 1–80 characters')
+        return list(dict.fromkeys(value.strip() for value in values))
+
+    @field_validator('reference_websites')
+    @classmethod
+    def references(cls, values):
+        return list(dict.fromkeys(cls.seed_url(value) for value in values))
+
+    @field_validator('exclude_domains')
+    @classmethod
+    def excluded_domains(cls, values):
+        result = []
+        for value in values:
+            value = value.strip().lower().removeprefix('www.').rstrip('.')
+            if len(value) > 253 or '.' not in value or any(char not in 'abcdefghijklmnopqrstuvwxyz0123456789-.' for char in value):
+                raise ValueError('Excluded domains must be bare hostnames')
+            if value not in result:
+                result.append(value)
+        return result
 
 
 class AgentConfigPatch(BaseModel):
@@ -39,12 +84,26 @@ class AgentConfigPatch(BaseModel):
     product: str | None = None
     hs_code: str | None = None
     target_count: int | None = None
+    buyer_role: Literal['any', 'distributor', 'manufacturer', 'brand', 'service_provider', 'public_buyer'] | None = None
+    seed_website: str | None = None
+    exclude_keywords: list[str] | None = None
+    exclude_domains: list[str] | None = None
+    reference_websites: list[str] | None = None
+    public_sources: list[Literal['ted']] | None = None
 
 
 class PublicSearch(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     instructions: str = Field(min_length=1, max_length=1000)
+
+
+class ProspectingRunRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    acquisition_tier: Literal['basic', 'enhanced'] = 'basic'
+    confirm_paid: bool = False
+    enhancement_goal: Literal['trade', 'contacts'] = 'trade'
 
 
 class ReportRequest(BaseModel):
@@ -128,6 +187,7 @@ def job_view(job: Job) -> dict:
         'agent_id': job.agent_id,
         'config_version': job.config_version,
         'operation': job.operation,
+        'acquisition_tier': job.payload.get('acquisition_tier', 'basic') if job.operation == 'prospecting' else None,
         'status': job.status,
         'point_cost': job.point_cost,
         'points_charged': job.points_charged,
@@ -164,13 +224,14 @@ def enqueue(session, workspace, settings, operation, payload, key, fingerprint, 
     if pending >= settings.max_pending_jobs:
         raise HTTPException(status_code=429, detail='job_queue_limit')
 
-    points = settings.point_cost(operation)
+    pricing=point_quote(settings,operation,payload)
+    points = pricing['total_points']
     wallet = session.get(Wallet, workspace)
     if wallet.available < points:
         raise HTTPException(status_code=409, detail='insufficient_points')
 
     job = Job(
-        workspace_id=workspace, operation=operation, payload=payload, point_cost=points,
+        workspace_id=workspace, operation=operation, payload={**payload,'point_pricing':pricing}, point_cost=points,
         agent_id=agent.id if agent else None, config_version=agent.config_version if agent else None,
         idempotency_key=key, request_hash=fingerprint,
     )
@@ -184,8 +245,14 @@ def enqueue(session, workspace, settings, operation, payload, key, fingerprint, 
 
 
 def has_deliverable(operation: str, result: dict | None) -> bool:
-    field = {'prospecting': 'leads', 'report': 'report', 'public_search': 'sources',
-             'customs_verification': 'customs', **dict.fromkeys(BUYER_OPERATIONS.values(), 'buyer')}.get(operation)
+    if operation in ('directory_companies', 'directory_people', 'directory_contacts'):
+        return bool((result or {}).get('directory', {}).get('records'))
+    if operation == 'source_lookup':
+        return bool((result or {}).get('source_lookup', {}).get('records'))
+    if operation == 'report' and (result or {}).get('contact_candidates'):
+        return True
+    field = {'prospecting': 'leads', 'report': 'report', 'public_search': 'sources', 'outreach_draft': 'draft',
+             'customs_verification': 'customs', 'trade_search': 'customs', **dict.fromkeys(BUYER_OPERATIONS.values(), 'buyer')}.get(operation)
     return bool(field and (result or {}).get(field))
 
 
@@ -197,14 +264,24 @@ def finish_job(session, job: Job, status: str, result: dict | None = None, error
     charged = job.point_cost if status == 'succeeded' or (
         status == 'partial' and has_deliverable(job.operation, result)
     ) else 0
+    pricing=job.payload.get('point_pricing')
+    if charged and pricing:
+        supplier_calls=session.scalars(select(ProviderCall).where(ProviderCall.job_id==job.id,
+            ProviderCall.endpoint.startswith('upkuajing_',autoescape=True),ProviderCall.status=='succeeded'))
+        values=[(call.result or {}).get('reported_milli_cny') for call in supplier_calls]
+        reported=sum(value for value in values if type(value) is int and value>=0)
+        data=min(pricing['data_points'],(reported*pricing['points_per_cny']+999)//1000)
+        charged=pricing['platform_points']+data
+        if result is not None:result={**result,'point_settlement':{
+            'platform_points':pricing['platform_points'],'data_points':data,'released_points':job.point_cost-charged,
+            'data_costs_without_report_not_charged':True}}
     if job.point_cost:
         wallet = session.get(Wallet, job.workspace_id)
         wallet.reserved -= job.point_cost
         wallet.available += job.point_cost - charged
-        session.add(PointEntry(
-            workspace_id=job.workspace_id, reference=job.id, kind='charge' if charged else 'release',
-            points=job.point_cost,
-        ))
+        if charged:session.add(PointEntry(workspace_id=job.workspace_id,reference=job.id,kind='charge',points=charged))
+        if job.point_cost>charged:session.add(PointEntry(workspace_id=job.workspace_id,reference=job.id,
+            kind='release',points=job.point_cost-charged))
     job.status = status
     job.result = result
     job.error = error
@@ -213,14 +290,15 @@ def finish_job(session, job: Job, status: str, result: dict | None = None, error
     fetched = session.scalars(select(ProviderCall).where(ProviderCall.job_id == job.id, ProviderCall.endpoint == 'fetch'))
     for call in fetched:
         if call.result is not None:
-            call.result = None
+            call.result = {'evidence_status': 'text_available' if call.result.get('content') else 'empty',
+                           'cache_hit': bool(call.result.get('cache_hit'))}
 
 
 @router.get('/points')
 def points_balance(workspace: WorkspaceAccess, sessions: Sessions):
     with sessions() as session:
         wallet = session.get(Wallet, workspace)
-        return {'available': wallet.available, 'reserved': wallet.reserved, 'points_per_100_cny': 1000}
+        return {'available': wallet.available, 'reserved': wallet.reserved, 'points_per_100_cny': 100*POINTS_PER_CNY}
 
 
 @router.get('/points/ledger')
@@ -237,6 +315,23 @@ def point_ledger(workspace: WorkspaceAccess, sessions: Sessions, limit: int = Qu
 def point_costs(request: Request, workspace: WorkspaceAccess):
     settings = request.app.state.settings
     return {operation: settings.point_cost(operation) for operation in sorted(BILLABLE_OPERATIONS)}
+
+
+class PointQuote(BaseModel):
+    platform_points: int
+    data_points: int
+    total_points: int
+    data_budget_milli_cny: int
+    points_per_cny: int
+    data_settlement: str
+
+
+@router.get('/points/quotes',response_model=dict[str,PointQuote])
+def point_quotes(request: Request,workspace: WorkspaceAccess):
+    """完整点数预占报价，包含付费数据预算；增强档最多 600 数据点，已明确回传费用结算后释放差额。"""
+    settings=request.app.state.settings
+    return {**{operation:point_quote(settings,operation) for operation in sorted(BILLABLE_OPERATIONS)},
+        'prospecting_enhanced':point_quote(settings,'prospecting',{'acquisition_tier':'enhanced'})}
 
 
 @router.post('/agents', status_code=201)
@@ -291,13 +386,22 @@ def update_agent(agent_id: str, body: AgentConfigPatch, workspace: WorkspaceAcce
 
 @router.post('/agents/{agent_id}/runs', status_code=202)
 def start_agent(agent_id: str, request: Request, workspace: WorkspaceAccess, sessions: Sessions,
-                idempotency_key: IdempotencyKey = None):
-    fingerprint = request_fingerprint('prospecting', {'agent_id': agent_id})
+                idempotency_key: IdempotencyKey = None, body: ProspectingRunRequest = ProspectingRunRequest()):
+    identity = {'agent_id': agent_id}
+    if body.acquisition_tier == 'enhanced':
+        if not body.confirm_paid:
+            raise HTTPException(409, 'paid_confirmation_required')
+        identity['acquisition_tier'] = 'enhanced'
+        if body.enhancement_goal == 'contacts':
+            identity['enhancement_goal'] = 'contacts'
+    fingerprint = request_fingerprint('prospecting', identity)
     with write_transaction(sessions) as session:
         lock_workspace(session, workspace)
         replay = replay_job(session, workspace, idempotency_key, fingerprint)
         if replay is not None:
             return job_view(replay)
+        if body.acquisition_tier == 'enhanced' and not customs_available(request):
+            raise HTTPException(503, 'customs_provider_unavailable')
         agent = get_agent(session, workspace, agent_id)
         active = session.scalar(select(Job.id).where(
             Job.workspace_id == workspace, Job.agent_id == agent.id, Job.status.in_(ACTIVE_STATES),
@@ -305,12 +409,22 @@ def start_agent(agent_id: str, request: Request, workspace: WorkspaceAccess, ses
         if active:
             raise HTTPException(status_code=409, detail='agent_run_in_progress')
         agent.status = 'enabled'
+        payload = {**current_config(session, agent), 'acquisition_tier': body.acquisition_tier}
+        if body.acquisition_tier == 'enhanced':
+            payload['enhancement_goal'] = body.enhancement_goal
+            payload['paid_budget_milli_cny'] = 6000
+            payload['trade_date_end'] = utcnow().date().isoformat()
+            payload['trade_date_start'] = (utcnow().date() - timedelta(days=365)).isoformat()
         return job_view(enqueue(session, workspace, request.app.state.settings, 'prospecting',
-                                current_config(session, agent), idempotency_key, fingerprint, agent))
+                                payload, idempotency_key, fingerprint, agent))
 
 
 def stop_agent(session, agent: Agent, delete: bool) -> None:
     agent.status = 'deleted' if delete else 'paused'
+    schedule = session.get(AgentSchedule, agent.id)
+    if schedule and schedule.enabled:
+        schedule.enabled = False
+        schedule.version += 1
     if delete:
         agent.deleted_at = utcnow()
     active = session.scalars(select(Job).where(
@@ -383,14 +497,15 @@ class ProviderHttpLog(BaseModel):
 def job_provider_logs(job_id: str, workspace: WorkspaceAccess, sessions: Sessions):
     """读取本工作空间任务的上游调用日志，含脱敏请求、返回、HTTP 状态和耗时。
 
-    仅包含实际访问跨境魔方的调用；旧任务可能没有请求或返回正文。
+    包含跨境魔方与 Hunter 的实际调用；旧任务可能没有请求或返回正文。
     JSON 正文最多保留 100000 字符预览，非 JSON 返回只记录类型与字节数。
     """
     with sessions() as session:
         get_job(session, workspace, job_id)
         calls = session.scalars(select(ProviderCall).where(
             ProviderCall.job_id == job_id,
-            ProviderCall.endpoint.startswith('upkuajing_', autoescape=True),
+            or_(ProviderCall.endpoint.startswith('upkuajing_', autoescape=True),
+                ProviderCall.endpoint.startswith('hunter_', autoescape=True)),
         ).order_by(ProviderCall.started_at, ProviderCall.id))
         return [{'id': call.id, 'step': call.step, 'endpoint': call.endpoint, 'status': call.status,
                  'error': call.error, 'started_at': call.started_at,
@@ -467,7 +582,7 @@ def customs_verification(body: CustomsVerificationRequest, request: Request, wor
                 raise HTTPException(status_code=503, detail='customs_provider_unavailable')
             if body.company_id is not None:
                 selected = selected_buyer(session, workspace, body.match_job_id, body.company_id)
-                payload.update(buyer=selected['name'], buyer_country=selected['buyer_country'])
+                payload.update(buyer=selected['name'], buyer_country=selected.get('buyer_country') or body.buyer_country)
             job = enqueue(session, workspace, settings, 'customs_verification', payload, idempotency_key, fingerprint)
         return job_view(job)
 
@@ -519,7 +634,8 @@ def report_details(report_id: str, workspace: WorkspaceAccess, sessions: Session
                 fetch = fetch_by_step.get(f'fetch-{digest}')
                 if fetch is not None and fetch.status != 'succeeded':
                     status = 'fetch_failed'
-                elif fetch is not None and fetch.estimated_milli_cny == 5:
+                elif fetch is not None and (fetch.estimated_milli_cny == 5 or
+                        (fetch.result or {}).get('evidence_status') == 'text_available'):
                     status = 'text_available'
                 else:
                     status = 'summary_only' if source.get('summary') or source.get('snippet') else 'link_only'

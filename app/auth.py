@@ -6,11 +6,12 @@ from secrets import token_bytes, token_urlsafe
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field, SecretStr
-from sqlalchemy import select
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from app.db import AccessSession, PointEntry, User, Wallet, Workspace, utcnow, write_transaction
+from app.request_limits import consume
 from app.verification import IssuedChallenge, VerificationProvider
 
 
@@ -78,8 +79,13 @@ def verify_code(provider: VerificationProvider, phone: str, body: CodeVerificati
 
 
 @router.post('/verification-codes', status_code=201)
-def request_code(body: CodeRequest, provider: VerificationProvider = Depends(verification_provider)) -> IssuedChallenge:
-    return provider.request(normalize_phone(body.phone))
+def request_code(body: CodeRequest, provider: VerificationProvider = Depends(verification_provider),
+                 sessions=Depends(session_factory)) -> IssuedChallenge:
+    phone=normalize_phone(body.phone)
+    consume(sessions,'sms-minute',phone,1,60)
+    consume(sessions,'sms-day',phone,10,86400)
+    consume(sessions,'sms-global','all',100,86400)
+    return provider.request(phone)
 
 
 @router.post('/verification-codes/verify')
@@ -125,17 +131,18 @@ def token_digest(token: str) -> str:
 @router.post('/login')
 def login(body: Login, sessions=Depends(session_factory)):
     phone = normalize_phone(body.phone)
-    with sessions() as session:
-        user = session.scalar(select(User).where(User.phone == phone))
+    consume(sessions,'login',phone,20,900)
+    token = token_urlsafe(32)
+    expires_at = utcnow() + timedelta(hours=12)
+    # Serialize credential verification/session issuance with password reset/change.
+    # Otherwise an in-flight old-password login could issue a token after revocation.
+    with write_transaction(sessions) as session:
+        user = session.scalar(select(User).where(User.phone == phone).with_for_update())
         stored = user.password_hash if user else None
         if not verify_password(body.password.get_secret_value(), stored):
             raise HTTPException(status_code=401, detail='invalid_credentials')
         workspace_id = session.scalar(select(Workspace.id).where(Workspace.owner_id == user.id))
         user_id = user.id
-
-    token = token_urlsafe(32)
-    expires_at = utcnow() + timedelta(hours=12)
-    with write_transaction(sessions) as session:
         session.add(AccessSession(token_hash=token_digest(token), user_id=user_id, expires_at=expires_at))
     return {'access_token': token, 'token_type': 'bearer', 'workspace_id': workspace_id, 'expires_in': 43200}
 
@@ -169,3 +176,52 @@ def logout(access: AccessSession = Depends(active_session), sessions=Depends(ses
         stored = session.get(AccessSession, access.token_hash)
         if stored is not None:
             session.delete(stored)
+
+
+class PasswordReset(CodeVerification):
+    model_config=ConfigDict(extra='forbid',json_schema_extra={'examples':[{
+        'phone':'13800000000','challenge_id':'issued-challenge','code':'123456','new_password':'new-password-2026'}]})
+    new_password: SecretStr = Field(min_length=8,max_length=128)
+
+
+class PasswordChange(BaseModel):
+    model_config=ConfigDict(extra='forbid',json_schema_extra={'examples':[{
+        'current_password':'old-password','new_password':'new-password-2026'}]})
+    current_password: SecretStr = Field(min_length=8,max_length=128)
+    new_password: SecretStr = Field(min_length=8,max_length=128)
+
+
+class PasswordResult(BaseModel):
+    updated: bool
+    login_required: bool
+
+
+@router.post('/password-reset',response_model=PasswordResult)
+def reset_password(body: PasswordReset, provider: VerificationProvider = Depends(verification_provider),
+                   sessions=Depends(session_factory)):
+    """使用一次性手机验证码重置密码，并撤销该账户全部已有登录会话。"""
+    phone=normalize_phone(body.phone)
+    consume(sessions,'password-reset',phone,10,900)
+    verify_code(provider,phone,body)
+    password_hash=hash_password(body.new_password.get_secret_value())
+    with write_transaction(sessions) as session:
+        user=session.scalar(select(User).where(User.phone==phone).with_for_update())
+        if user:
+            user.password_hash=password_hash
+            session.execute(delete(AccessSession).where(AccessSession.user_id==user.id))
+    # Same response prevents using this endpoint to enumerate registered numbers.
+    return {'updated':True,'login_required':True}
+
+
+@router.post('/password-change',response_model=PasswordResult)
+def change_password(body: PasswordChange, access: AccessSession=Depends(active_session),
+                    sessions=Depends(session_factory)):
+    """校验当前密码后更新，立即撤销所有会话；客户端必须重新登录。"""
+    consume(sessions,'password-change',access.user_id,10,900)
+    with write_transaction(sessions) as session:
+        user=session.scalar(select(User).where(User.id==access.user_id).with_for_update())
+        if not user or not verify_password(body.current_password.get_secret_value(),user.password_hash):
+            raise HTTPException(400,'invalid_current_password')
+        user.password_hash=hash_password(body.new_password.get_secret_value())
+        session.execute(delete(AccessSession).where(AccessSession.user_id==user.id))
+    return {'updated':True,'login_required':True}

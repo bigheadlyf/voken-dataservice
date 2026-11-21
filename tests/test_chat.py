@@ -16,9 +16,11 @@ class ScriptedModel:
     def __init__(self, outputs):
         self.outputs = iter(outputs)
         self.payloads = []
+        self.scenarios = []
 
-    def complete(self, prompt, payload, max_tokens):
+    def complete(self, prompt, payload, max_tokens, scenario=None):
         self.payloads.append(payload.copy())
+        self.scenarios.append(scenario)
         value = next(self.outputs)
         if isinstance(value, Exception):
             raise value
@@ -62,6 +64,7 @@ class ChatTest(TestCase):
         self.assertEqual(job['status'], 'queued')
         self.assertEqual(self.send('chat-1').json(), turn)
         self.assertEqual(len(model.payloads), 3)
+        self.assertEqual(model.scenarios, ['chat', 'chat', 'chat'])
         self.assertEqual(self.send('chat-1', content='不同内容').status_code, 409)
         self.assertEqual(self.client.get(self.root + '/points', headers=self.token).json()['reserved'], 1)
         Worker(self.sessions, self.settings, self.upstream).run_next()

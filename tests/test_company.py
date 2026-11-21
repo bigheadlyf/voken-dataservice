@@ -88,6 +88,7 @@ class CompanyTest(TestCase):
     def test_document_preview_apply_replay_and_original_source(self):
         result = self.upload()
         self.assertEqual(result.status_code, 201, result.text)
+        self.assertEqual(self.app.state.chat_provider.scenarios, ['analysis'])
         analysis = result.json()
         self.assertEqual(self.request('GET', '/profile').json()['version'], 0)
         self.assertEqual(self.request('GET', '/memories').json(), [])

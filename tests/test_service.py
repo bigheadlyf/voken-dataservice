@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
@@ -11,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.config import Settings
-from app.db import Base, Job, ProviderCall, Wallet, write_transaction
+from app.db import Base, Job, ProviderCall, Wallet, utcnow, write_transaction
 from app.deepseek import DeepSeek, ProviderError
 from app.main import create_app
 from app.upkuajing import Upkuajing
@@ -21,17 +22,21 @@ from app.worker import Worker
 class FixtureDeepSeek:
     def __init__(self):
         self.calls = []
+        self.scenarios = []
 
-    def complete(self, _prompt, payload, _max_tokens):
+    def complete(self, _prompt, payload, _max_tokens, scenario=None):
         self.calls.append('model')
+        self.scenarios.append(scenario)
         if 'lead' in payload:
             result = {'overview': 'Public buyer page', 'opportunity': 'Review the tender',
                       'highlights': [{'text': 'Public tender', 'source_ids': [0, 999, 0]}],
                       'risks': ['No credit report'], 'next_steps': ['Verify the bid deadline'],
                       'source_ids': [0, 999]}
         elif 'sources' in payload:
+            deadline = (utcnow().date() + timedelta(days=7)).isoformat()
             result = {'leads': [{'name': 'Fixture Buyer', 'role': 'buyer', 'location': 'US',
-                                 'source_id': 0, 'quote': 'Buying LED products', 'demand': True}]}
+                                 'source_id': 0, 'quote': 'Buying LED products', 'demand': True,
+                                 'deadline_date': deadline, 'deadline_quote': f'Submission deadline: {deadline}'}]}
         else:
             result = {'market': 'US', 'product': 'LED', 'target_count': 1,
                       'queries': ['LED procurement'], 'require_procurement_evidence': True}
@@ -39,11 +44,12 @@ class FixtureDeepSeek:
 
     def search(self, query):
         self.calls.append(query)
-        return {'hits': [{'url': 'https://example.com/tender', 'title': 'Tender'}], 'billable': True}
+        return {'hits': [{'url': 'https://example.com/tender', 'title': 'Fixture Buyer — Tender'}], 'billable': True}
 
     def fetch(self, url):
         self.calls.append(url)
-        return {'content': 'Buying LED products', 'billable': True}
+        deadline = (utcnow().date() + timedelta(days=7)).isoformat()
+        return {'content': f'Buying LED products. Submission deadline: {deadline}', 'billable': True}
 
 
 class ServiceTest(TestCase):
@@ -118,6 +124,8 @@ class ServiceTest(TestCase):
         self.assertEqual(report['result']['sources'][0]['evidence_status'], 'text_available')
         self.assertEqual(report['result']['subject']['name'], 'Fixture Buyer')
         self.assertEqual(report['points_charged'], 3)
+        # The fixture has no full name in its body; review safely skips the model.
+        self.assertEqual(self.upstream.scenarios, ['judgment'] * 3 + ['analysis'])
         self.assertEqual(self.client.get(root + '/points', headers=token).json()['available'], 996)
 
         with write_transaction(self.sessions) as session:
@@ -222,10 +230,10 @@ class ServiceTest(TestCase):
         root = f'/api/v1/workspaces/{workspace}'
 
         class ExtractionTimeout(FixtureDeepSeek):
-            def complete(self, prompt, payload, max_tokens):
+            def complete(self, prompt, payload, max_tokens, scenario=None):
                 if 'sources' in payload:
                     raise ProviderError('deepseek_read_timeout', unknown_charge=True)
-                return super().complete(prompt, payload, max_tokens)
+                return super().complete(prompt, payload, max_tokens, scenario)
 
         agent = self.client.post(root + '/agents', headers=token,
                                  json={'name': 'LED', 'instructions': 'Find USA LED buyers'}).json()
@@ -280,7 +288,7 @@ class ServiceTest(TestCase):
         result = self.client.get(root + '/jobs/' + job['id'], headers=token).json()
         self.assertEqual(result['result']['customs']['records'][0]['trade_id'], 'fixture-trade')
         self.assertEqual(result['result']['customs']['reported_milli_cny'], 1500)
-        self.assertEqual(result['points_charged'], 1)
+        self.assertEqual(result['points_charged'], 151)
 
         logs_path = root + '/jobs/' + job['id'] + '/provider-logs'
         logs = self.client.get(logs_path, headers=token).json()
@@ -384,7 +392,7 @@ class DeepSeekTest(TestCase):
                 return httpx.Response(200, json={'content': ''})
             return httpx.Response(200, json={'choices': [{'message': {'content': '{"ok":true}'}}]})
 
-        adapter = DeepSeek(Settings(llm_api_key='synthetic-key'))
+        adapter = DeepSeek(Settings(llm_api_key='synthetic-key', tools_api_key='synthetic-key'))
         adapter.close()
         with httpx.Client(base_url='https://api.deepseek.com', transport=httpx.MockTransport(respond)) as client:
             adapter.client = client
@@ -400,7 +408,7 @@ class DeepSeekTest(TestCase):
             self.assertEqual(request.extensions['timeout']['read'], 90)
             raise httpx.ReadTimeout('fixture timeout', request=request)
 
-        adapter = DeepSeek(Settings(llm_api_key='synthetic-key'))
+        adapter = DeepSeek(Settings(llm_api_key='synthetic-key', tools_api_key='synthetic-key'))
         adapter.close()
         with httpx.Client(base_url='https://api.deepseek.com', transport=httpx.MockTransport(timeout)) as client:
             adapter.client = client
@@ -411,6 +419,21 @@ class DeepSeekTest(TestCase):
 
 
 class TestConsoleTest(TestCase):
+    def test_asset_versions_match_served_file_contents(self):
+        import re
+        from hashlib import sha256
+
+        for prefix in ('', '/api'):
+            with self.subTest(prefix=prefix), TestClient(create_app(settings=Settings(environment='test', web_prefix=prefix))) as client:
+                page = client.get(prefix + '/')
+                self.assertEqual(page.headers['cache-control'], 'no-store')
+                for filename in ('console.js', 'styles.css'):
+                    version = re.search(re.escape(filename) + r'\?v=([a-f0-9]{16})', page.text)
+                    self.assertIsNotNone(version, page.text)
+                    asset = client.get(prefix + '/test-assets/' + filename + '?v=' + version[1])
+                    self.assertEqual(asset.status_code, 200)
+                    self.assertEqual(version[1], sha256(asset.content).hexdigest()[:16])
+
     def test_prefixed_console_docs_and_health_keep_business_routes(self):
         with TestClient(create_app(settings=Settings(environment='test', web_prefix='/api'))) as client:
             self.assertEqual(client.get('/api/').status_code, 200)
@@ -436,12 +459,25 @@ class TestConsoleTest(TestCase):
         with TestClient(create_app(settings=Settings(environment='production'))) as client:
             response = client.get('/', follow_redirects=False)
             self.assertEqual(response.status_code, 307)
-            self.assertEqual(response.headers['location'], '/docs')
+            self.assertEqual(response.headers['location'], '/app')
             self.assertEqual(client.get('/').status_code, 200)
+            product = client.get('/app')
+            self.assertIn('/app-assets/react/app.js?v=', product.text)
+            self.assertIn('/app-assets/react/main.css?v=', product.text)
+            self.assertNotIn('__STYLE_NONCE__', product.text)
+            self.assertNotIn('__UI_VERSION__', product.text)
+            self.assertIn("script-src 'self'", product.headers['content-security-policy'])
+            self.assertIn("style-src 'self' 'nonce-", product.headers['content-security-policy'])
+            self.assertEqual(client.get('/app-assets/react/app.js').status_code, 200)
+            self.assertEqual(client.get('/app-assets/react/main.css').status_code, 200)
+            self.assertIn('/app-assets/app.js', client.get('/app?legacy=true').text)
+            self.assertFalse(client.get('/health').json()['self_registration_available'])
             self.assertEqual(client.get('/test-assets/console.js').status_code, 404)
 
         with TestClient(create_app(settings=Settings(environment='production', web_prefix='/api'))) as client:
             response = client.get('/api/', follow_redirects=False)
             self.assertEqual(response.status_code, 307)
-            self.assertEqual(response.headers['location'], '/api/docs')
+            self.assertEqual(response.headers['location'], '/api/app')
             self.assertEqual(client.get('/api/').status_code, 200)
+            self.assertIn('/api/app-assets/react/app.js?v=', client.get('/api/app').text)
+            self.assertEqual(client.get('/api/app-assets/react/app.js').status_code, 200)

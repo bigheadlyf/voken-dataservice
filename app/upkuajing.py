@@ -1,10 +1,12 @@
 from datetime import datetime, time, timedelta, timezone
 from time import monotonic
+import math
 
 import httpx
 
 from app.deepseek import ProviderError
 from app.provider_logging import record_http, safe_body
+from app.upkuajing_directory import DirectoryMethods
 
 
 ACCOUNT_ENDPOINT = '/agent/auth/info'
@@ -47,10 +49,22 @@ def evidence_result(body: dict, records: list[dict]) -> dict:
         'source': 'upkuajing', 'records': records,
         'request_id': request_id[:128] if isinstance(request_id, str) else None,
         'reported_milli_cny': cost_in_fen * 10 if type(cost_in_fen) is int and 0 <= cost_in_fen <= 214748364 else None,
+        'quota_usage': quota_usage(body.get('usage')),
     }
 
 
-class Upkuajing:
+def quota_usage(usage):
+    usage = usage if isinstance(usage, dict) else {}
+    def units(row):
+        value = row.get('used') if isinstance(row, dict) else None
+        return value if type(value) is int and value >= 0 else 0
+    return {'billing_mode': usage.get('billingMode') if usage.get('billingMode') in ('PLAN', 'BALANCE') else 'unknown',
+            'request_units': units(usage.get('request')),
+            'record_units': sum(units(row) for row in usage.get('records', []) if isinstance(row, dict)),
+            'unlock_units': sum(units(row) for row in usage.get('unlocks', []) if isinstance(row, dict))}
+
+
+class Upkuajing(DirectoryMethods):
     def __init__(self, key: str, transport: httpx.BaseTransport | None = None):
         self.key = key
         self.client = httpx.Client(
@@ -102,23 +116,45 @@ class Upkuajing:
         self._post(ACCOUNT_ENDPOINT, {})
 
     def search_buyers(self, filters: dict) -> dict:
-        body = self._post(BUYER_SEARCH_ENDPOINT, {
-            'companyType': 2, 'buyer': filters['buyer'], 'buyerCountryCodes': [filters['buyer_country']],
-            'isExact': False,
-        })
+        payload = {'companyType': 2, 'buyerCountryCodes': [filters['buyer_country']], 'isExact': False}
+        if filters.get('buyer'):
+            payload['buyer'] = filters['buyer']
+        else:
+            if not (filters.get('product') or filters.get('hs_code')):
+                raise ProviderError('upkuajing_invalid_filters')
+            payload.update(sorting_field='latestTradeDate', sorting_direction='desc')
+            start = datetime.fromisoformat(filters['date_start']).replace(tzinfo=timezone.utc)
+            end = datetime.fromisoformat(filters['date_end']).replace(tzinfo=timezone.utc) + timedelta(days=1)
+            payload.update(dateStart=int(start.timestamp() * 1000), dateEnd=int(end.timestamp() * 1000) - 1)
+            if filters.get('product'):
+                payload['products'] = [filters['product']]
+            if filters.get('hs_code'):
+                payload['hscodes'] = [filters['hs_code'][:6]]
+        body = self._post(BUYER_SEARCH_ENDPOINT, payload)
         matches = {}
         for row in response_rows(body)[:20]:
             if not isinstance(row, dict):
                 continue
             identifier = company_id(row.get('companyId'))
             fields = short_text_fields(row, ('name', 'scope', 'address'))
+            fields.update(short_text_fields(row, ('productDesc',)))
+            for field in ('tradeTotal', 'tradeMatchTotal', 'tradeMatchPercent', 'latestTradeDate'):
+                if type(row.get(field)) in (int, float):
+                    fields[field] = row[field]
             if identifier is None or not fields.get('name'):
                 continue
             country_info = row.get('countryInfo')
-            country = country_info.get('code_iso2') if isinstance(country_info, dict) else None
+            country = row.get('countryCode')
+            if not country and isinstance(country_info, dict):
+                country = country_info.get('countryCode') or country_info.get('code_iso2')
+            country = country.strip().upper() if isinstance(country, str) else None
+            if not country or len(country) != 2 or not country.isascii() or not country.isalpha():
+                country = None
             if isinstance(country, str) and country.upper() != filters['buyer_country']:
                 continue
-            matches.setdefault(identifier, {**fields, 'company_id': identifier, 'buyer_country': filters['buyer_country']})
+            matches.setdefault(identifier, {**fields, 'company_id': identifier, 'buyer_country': country,
+                'requested_buyer_country': filters['buyer_country'],
+                'country_verification': 'provider_reported' if country else 'unknown'})
         return {**evidence_result(body, list(matches.values())), 'has_more': bool(body['data'].get('cursor'))}
 
     def get_buyer_profile(self, selected: dict) -> dict:
@@ -156,12 +192,20 @@ class Upkuajing:
     def verify_trades(self, filters: dict) -> dict:
         start = datetime.combine(datetime.fromisoformat(filters['date_start']).date(), time.min, tzinfo=timezone.utc)
         end = datetime.combine(datetime.fromisoformat(filters['date_end']).date(), time.min, tzinfo=timezone.utc)
-        buyer = {'buyerId': filters['company_id']} if filters.get('company_id') else {'buyer': filters['buyer']}
+        buyer = {'buyerId': filters['company_id']} if filters.get('company_id') else ({'buyer': filters['buyer']} if filters.get('buyer') else {})
         payload = {
-            **buyer, 'buyerCountryCodes': [filters['buyer_country']],
+            **buyer,
             'isExact': True,
             'dateStart': int(start.timestamp() * 1000), 'dateEnd': int((end + timedelta(days=1)).timestamp() * 1000) - 1,
         }
+        if filters.get('buyer_country'):
+            payload['buyerCountryCodes'] = [filters['buyer_country']]
+        if filters.get('origin_country'):
+            payload['originCountryCodes'] = [filters['origin_country']]
+        if filters.get('cursor'):
+            payload['cursor'] = filters['cursor']
+        if filters.get('sort_latest'):
+            payload.update(sorting_field='tradeDate', sorting_direction='desc')
         if filters.get('hs_code'):
             payload['hscodes'] = [filters['hs_code']]
         if filters.get('product'):
@@ -180,14 +224,35 @@ class Upkuajing:
                 continue
             seen.add(record_id)
             record = {'trade_id': record_id[:256]}
+            for key, vendor_key in (('buyer_company_id', 'buyerCompanyId'), ('seller_company_id', 'sellerCompanyId')):
+                record[key] = company_id(item.get(vendor_key))
             for result_key, vendor_key in (('buyer', 'buyer'), ('seller', 'seller'), ('product_description', 'productDesc')):
                 if isinstance(item.get(vendor_key), str):
                     record[result_key] = item[vendor_key][:600]
             if type(item.get('tradeDate')) is int:
                 record['trade_date_ms'] = item['tradeDate']
             codes = item.get('productHscodes6')
+            if not isinstance(codes, list):
+                code = item.get('productHscode')
+                codes = [code] if isinstance(code, str) else []
             if isinstance(codes, list):
                 record['hs_codes'] = [code for code in codes[:20] if isinstance(code, str) and code.isascii() and code.isdigit()]
+            # Preserve units and route as reported. A query filter is never evidence
+            # of the returned company's country, shipment route, currency or SKU quantity.
+            for key, vendor_key in (
+                ('buyer_country', 'buyerCountryCode'), ('seller_country', 'sellerCountryCode'),
+                ('origin_country', 'originCountryCode'), ('arrival_country', 'arrivalCountryCode'),
+                ('buyer_port', 'buyerPort'), ('seller_port', 'sellerPort'),
+                ('quantity_unit', 'quantityUnit'), ('weight_unit', 'weightUnit'),
+                ('amount_unit', 'amountUnit'), ('provider_trade_id', 'tradeId'),
+            ):
+                value = item.get(vendor_key)
+                record[key] = value.strip()[:300] if isinstance(value, str) and value.strip() else None
+            for key in ('quantity', 'weight', 'amount', 'price'):
+                value = item.get(key)
+                record[key] = value if type(value) in (int, float) and math.isfinite(value) else None
             records.append(record)
 
-        return {**evidence_result(body, records), 'has_more': bool(body['data'].get('cursor'))}
+        cursor = body['data'].get('cursor')
+        return {**evidence_result(body, records), 'has_more': bool(cursor),
+                'next_cursor': cursor if isinstance(cursor, str) else None}

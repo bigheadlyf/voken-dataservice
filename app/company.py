@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app import workspaces as ws
 from app.db import CompanyDocumentAnalysis, CompanyMemory, CompanyProfile, utcnow, write_transaction
 from app.deepseek import ProviderError
+from app.request_limits import consume
 
 router = APIRouter(prefix='/api/v1/workspaces/{workspace_id}/company', tags=['company'], responses={
     401: {'description': 'authentication_required：缺少或过期的 Bearer token。'},
@@ -20,7 +21,7 @@ router = APIRouter(prefix='/api/v1/workspaces/{workspace_id}/company', tags=['co
     409: {'description': 'company_version_conflict / company_memory_key_conflict / company_memory_limit。'},
     503: {'description': 'database_not_configured；文档分析也可能返回 deepseek_not_configured。'},
 })
-MAX_FILE_BYTES = 5 * 1024 * 1024
+MAX_FILE_BYTES = 50 * 1024 * 1024
 MAX_TEXT = 60000
 MAX_MEMORIES = 100
 
@@ -88,6 +89,7 @@ class DocumentProposal(BaseModel):
 
 
 class AnalysisView(BaseModel):
+    source: dict = Field(default_factory=dict)
     id: str
     filename: str
     proposal: DocumentProposal
@@ -308,32 +310,13 @@ profile 可用字段：name, website, industry, description, products, advantage
 def analysis_view(row):
     return {'id': row.id, 'filename': row.filename, 'proposal': row.proposal['data'],
             'base_profile_version': row.proposal['base_profile_version'],
-            'created_at': timestamp(row.created_at), 'applied_at': timestamp(row.applied_at)}
+            'created_at': timestamp(row.created_at), 'applied_at': timestamp(row.applied_at),
+            'source':row.proposal.get('source', {'type':'document','filename':row.filename})}
 
 
-@router.post('/document-analyses', status_code=201, response_model=AnalysisView, responses={
-    413: {'description': 'document_too_large / document_text_too_large。'},
-    415: {'description': 'unsupported_document_type：仅支持 TXT、MD、DOCX、文字型 PDF。'},
-    422: {'description': 'invalid_document / document_has_no_readable_text / encrypted_document_not_supported，或请求字段校验失败。'},
-    502: {'description': 'invalid_company_analysis 或模型供应商错误；不保存部分结果。'},
-})
-def analyze_company_document(request: Request, workspace: ws.WorkspaceAccess, sessions: ws.Sessions,
-                             file: UploadFile = File(description='最多 5 MiB；TXT/MD/DOCX/文字型 PDF。')):
-    """上传企业介绍并自动分析为草案，不自动覆盖资料。文件文本交由服务端配置的模型分析；不保存原文件。
-
-    最多 60000 字符、100 页 PDF；扫描件不支持 OCR。分析暂不扣平台点数，模型供应商可能计费。
-    模型错误返回 502，未配置返回 503；引文不存在或结构错误返回 502，不写入部分结果。
-    """
-    data = file.file.read(MAX_FILE_BYTES + 1)
-    if len(data) > MAX_FILE_BYTES:
-        raise HTTPException(413, 'document_too_large')
-    filename = (file.filename or 'document').replace('\\', '/').rsplit('/', 1)[-1][:255]
-    text = extract_document(filename, data)
-    with sessions() as session:
-        profile = session.get(CompanyProfile, workspace)
-        version = profile.version if profile else 0
+def propose_company_text(provider, text):
     try:
-        result = request.app.state.chat_provider.complete(ANALYSIS_PROMPT, {'document': text}, 6000)
+        result = provider.complete(ANALYSIS_PROMPT, {'document': text}, 6000, 'analysis')
         proposal = DocumentProposal.model_validate(result['output'])
         profile_data = proposal.profile.model_dump(exclude_none=True)
         if not profile_data and not proposal.memories:
@@ -351,6 +334,32 @@ def analyze_company_document(request: Request, workspace: ws.WorkspaceAccess, se
         raise HTTPException(503 if exc.code == 'deepseek_not_configured' else 502, exc.code) from None
     except (ValidationError, ValueError, KeyError, TypeError):
         raise HTTPException(502, 'invalid_company_analysis') from None
+    return proposal
+
+
+@router.post('/document-analyses', status_code=201, response_model=AnalysisView, responses={
+    413: {'description': 'document_too_large / document_text_too_large。'},
+    415: {'description': 'unsupported_document_type：仅支持 TXT、MD、DOCX、文字型 PDF。'},
+    422: {'description': 'invalid_document / document_has_no_readable_text / encrypted_document_not_supported，或请求字段校验失败。'},
+    502: {'description': 'invalid_company_analysis 或模型供应商错误；不保存部分结果。'},
+})
+def analyze_company_document(request: Request, workspace: ws.WorkspaceAccess, sessions: ws.Sessions,
+                             file: UploadFile = File(description='最多 50 MiB；TXT/MD/DOCX/文字型 PDF。')):
+    """上传企业介绍并自动分析为草案，不自动覆盖资料。文件文本交由服务端配置的模型分析；不保存原文件。
+
+    最多 60000 字符、100 页 PDF；扫描件不支持 OCR。分析暂不扣平台点数，模型供应商可能计费。
+    模型错误返回 502，未配置返回 503；引文不存在或结构错误返回 502，不写入部分结果。
+    """
+    data = file.file.read(MAX_FILE_BYTES + 1)
+    if len(data) > MAX_FILE_BYTES:
+        raise HTTPException(413, 'document_too_large')
+    filename = (file.filename or 'document').replace('\\', '/').rsplit('/', 1)[-1][:255]
+    text = extract_document(filename, data)
+    consume(sessions,'company-intake',workspace,request.app.state.settings.company_intake_daily_limit,86400)
+    with sessions() as session:
+        profile = session.get(CompanyProfile, workspace)
+        version = profile.version if profile else 0
+    proposal = propose_company_text(request.app.state.chat_provider, text)
     with write_transaction(sessions) as session:
         row = CompanyDocumentAnalysis(workspace_id=workspace, filename=filename,
             proposal={'data': proposal.model_dump(exclude_none=True), 'base_profile_version': version})
@@ -388,7 +397,7 @@ def apply_company_analysis(analysis_id: str, workspace: ws.WorkspaceAccess, sess
         require_version(profile, row.proposal['base_profile_version'])
         proposal = DocumentProposal.model_validate(row.proposal['data'])
         for item in proposal.memories:
-            insert_memory(session, workspace, item, {'type': 'document', 'analysis_id': row.id,
+            insert_memory(session, workspace, item, {**row.proposal.get('source', {'type':'document'}), 'analysis_id': row.id,
                 'filename': row.filename, 'evidence': item.evidence})
         data = {**(profile.data if profile else {}), **proposal.profile.model_dump(exclude_none=True)}
         if profile is None:
