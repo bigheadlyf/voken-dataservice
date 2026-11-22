@@ -41,7 +41,8 @@ partial 要显示已有结果、warnings 和证据来源；成功也可能没有
 员工 messages 的 acquisition_tier 控制本轮 start_task 的真实档位；付费工具也受本轮6元额度限制。
 历史确认或模型生成的字段不能替代当前请求授权。默认上游调用全平台按 UTC 日限 5 次，设为 0 会禁用新付费查询。
 DeepSeek 和跨境魔方密钥只在服务端配置，不由客户端传入。
-当前没有刷新 token、SSE、Webhook、独立 job cancel 或自动周期拓客接口。
+当前没有刷新 token、SSE、通用 Webhook 或独立 job cancel 接口。
+周期拓客使用 PUT /agents/{agent_id}/schedule 配置有限次数计划，GET /schedules 查看；周期计划仅执行基础公域档，不自动进行付费数据增强。
 HTTP 200 的任务/对话仍须检查 status/error；对话还须检查 tool_calls，工具成功提交不代表业务完成。
 
 ## 部署路径

@@ -1,0 +1,90 @@
+{
+  "observed_date": "2026-11-21",
+  "contact_comparison": {
+    "subjects": 3,
+    "http_requests": 6,
+    "all_contact_objects_equal": true,
+    "new_personal_emails": 0,
+    "billing_mode": "PLAN",
+    "fee_zero_does_not_mean_no_quota_use": true
+  },
+  "llm_review": {
+    "evaluation_mode": "captured_real_evidence_replay_with_live_model",
+    "models": [
+      "deepseek-v4-pro"
+    ],
+    "before_supported_leads": 0,
+    "after_supported_leads": 1,
+    "body_context_count": 5,
+    "new_search_calls": 0,
+    "new_contact_calls": 0,
+    "total_tokens": 2659,
+    "assessment": {
+      "role_fit": "fit",
+      "product_fit": "unknown",
+      "country_fit": "unknown"
+    },
+    "contact_obtained": false,
+    "complete_live_discovery_success_rate_demonstrated": false
+  },
+  "uk_official_sources": {
+    "find_tender": {
+      "query": "construction",
+      "since_days": 1,
+      "stage": "all",
+      "job_status": "partial",
+      "scanned_count": 100,
+      "matched_in_page": 9,
+      "returned_records": 5,
+      "records_with_published_buyer_email": 5,
+      "statuses": [
+        "historical_award",
+        "requires_deadline_and_eligibility_review",
+        "requires_deadline_and_eligibility_review",
+        "requires_deadline_and_eligibility_review",
+        "requires_deadline_and_eligibility_review"
+      ],
+      "search_scope": "one_upstream_page_not_global_keyword_search",
+      "total_reported": null,
+      "complete_database_search": false
+    },
+    "contracts_finder": {
+      "query": "laptops",
+      "since_days": 1,
+      "stage": "all",
+      "job_status": "partial",
+      "scanned_count": 100,
+      "matched_in_page": 1,
+      "returned_records": 1,
+      "records_with_published_buyer_email": 1,
+      "statuses": [
+        "historical_award"
+      ],
+      "search_scope": "one_upstream_page_not_global_keyword_search",
+      "total_reported": null,
+      "complete_database_search": false
+    }
+  },
+  "source_catalog": {
+    "direct_api": 6,
+    "site_scoped_web_search": 16,
+    "new_direct_upgrades": 2,
+    "new_site_scoped_entries": 5
+  },
+  "availability_probes": {
+    "wikidata": 403,
+    "gdelt": 429,
+    "commoncrawl_index_directory": 200,
+    "cpsc": 200
+  },
+  "external_messages_sent": 0,
+  "production_deployed": false,
+  "validation": {
+    "status": "passed",
+    "full_regression_tests": 144,
+    "duration_seconds": 101.682,
+    "javascript_checks": "passed",
+    "local_health_http": 200,
+    "local_app_http": 200
+  }
+}

@@ -1,0 +1,263 @@
+{
+  "sample_size": 3,
+  "http_requests": 6,
+  "all_same_contact_objects": true,
+  "results": [
+    {
+      "subject": "Marmetal Industries LLC",
+      "subject_type": 1,
+      "endpoints": [
+        {
+          "mode": "single",
+          "endpoint": "/search/contact",
+          "http_status": 200,
+          "code": 0,
+          "message": "success",
+          "top_level_keys": [
+            "code",
+            "data",
+            "fee",
+            "msg",
+            "requestId",
+            "usage"
+          ],
+          "data_keys": [
+            "emails",
+            "phones",
+            "socials",
+            "websites"
+          ],
+          "counts": {
+            "emails": 1,
+            "phones": 1,
+            "websites": 2,
+            "socials": 1
+          },
+          "fee": {
+            "apiCost": 0
+          },
+          "quota_usage": {
+            "billing_mode": "PLAN",
+            "request_units": 1,
+            "record_units": 5,
+            "unlock_units": 5
+          },
+          "duration_ms": 188
+        },
+        {
+          "mode": "batch",
+          "endpoint": "/agent/search/contact/batch",
+          "http_status": 200,
+          "code": 0,
+          "message": "success",
+          "top_level_keys": [
+            "code",
+            "data",
+            "fee",
+            "msg",
+            "requestId",
+            "usage"
+          ],
+          "data_keys": [
+            "emails",
+            "phones",
+            "socials",
+            "websites"
+          ],
+          "counts": {
+            "emails": 1,
+            "phones": 1,
+            "websites": 2,
+            "socials": 1
+          },
+          "fee": {
+            "apiCost": 0
+          },
+          "quota_usage": {
+            "billing_mode": "PLAN",
+            "request_units": 1,
+            "record_units": 5,
+            "unlock_units": 5
+          },
+          "duration_ms": 62
+        }
+      ],
+      "same_contact_values": true,
+      "same_contact_objects": true,
+      "single_data_shape": "data.{emails,phones,websites,socials}",
+      "batch_data_shape": "data.list[].{bus_id,bus_type,contact_data}"
+    },
+    {
+      "subject": "william tomaszewski",
+      "subject_type": 2,
+      "endpoints": [
+        {
+          "mode": "single",
+          "endpoint": "/search/contact",
+          "http_status": 200,
+          "code": 0,
+          "message": "success",
+          "top_level_keys": [
+            "code",
+            "data",
+            "fee",
+            "msg",
+            "requestId",
+            "usage"
+          ],
+          "data_keys": [
+            "emails",
+            "phones",
+            "socials",
+            "websites"
+          ],
+          "counts": {
+            "emails": 0,
+            "phones": 0,
+            "websites": 0,
+            "socials": 0
+          },
+          "fee": {
+            "apiCost": 0
+          },
+          "quota_usage": {
+            "billing_mode": "PLAN",
+            "request_units": 1,
+            "record_units": 0,
+            "unlock_units": 0
+          },
+          "duration_ms": 63
+        },
+        {
+          "mode": "batch",
+          "endpoint": "/agent/search/contact/batch",
+          "http_status": 200,
+          "code": 0,
+          "message": "success",
+          "top_level_keys": [
+            "code",
+            "data",
+            "fee",
+            "msg",
+            "requestId",
+            "usage"
+          ],
+          "data_keys": [
+            "emails",
+            "phones",
+            "socials",
+            "websites"
+          ],
+          "counts": {
+            "emails": 0,
+            "phones": 0,
+            "websites": 0,
+            "socials": 0
+          },
+          "fee": {
+            "apiCost": 0
+          },
+          "quota_usage": {
+            "billing_mode": "PLAN",
+            "request_units": 1,
+            "record_units": 0,
+            "unlock_units": 0
+          },
+          "duration_ms": 62
+        }
+      ],
+      "same_contact_values": true,
+      "same_contact_objects": true,
+      "single_data_shape": "data.{emails,phones,websites,socials}",
+      "batch_data_shape": "data.list[].{bus_id,bus_type,contact_data}"
+    },
+    {
+      "subject": "candice stover",
+      "subject_type": 2,
+      "endpoints": [
+        {
+          "mode": "single",
+          "endpoint": "/search/contact",
+          "http_status": 200,
+          "code": 0,
+          "message": "success",
+          "top_level_keys": [
+            "code",
+            "data",
+            "fee",
+            "msg",
+            "requestId",
+            "usage"
+          ],
+          "data_keys": [
+            "emails",
+            "phones",
+            "socials",
+            "websites"
+          ],
+          "counts": {
+            "emails": 0,
+            "phones": 0,
+            "websites": 0,
+            "socials": 0
+          },
+          "fee": {
+            "apiCost": 0
+          },
+          "quota_usage": {
+            "billing_mode": "PLAN",
+            "request_units": 1,
+            "record_units": 0,
+            "unlock_units": 0
+          },
+          "duration_ms": 63
+        },
+        {
+          "mode": "batch",
+          "endpoint": "/agent/search/contact/batch",
+          "http_status": 200,
+          "code": 0,
+          "message": "success",
+          "top_level_keys": [
+            "code",
+            "data",
+            "fee",
+            "msg",
+            "requestId",
+            "usage"
+          ],
+          "data_keys": [
+            "emails",
+            "phones",
+            "socials",
+            "websites"
+          ],
+          "counts": {
+            "emails": 0,
+            "phones": 0,
+            "websites": 0,
+            "socials": 0
+          },
+          "fee": {
+            "apiCost": 0
+          },
+          "quota_usage": {
+            "billing_mode": "PLAN",
+            "request_units": 1,
+            "record_units": 0,
+            "unlock_units": 0
+          },
+          "duration_ms": 47
+        }
+      ],
+      "same_contact_values": true,
+      "same_contact_objects": true,
+      "single_data_shape": "data.{emails,phones,websites,socials}",
+      "batch_data_shape": "data.list[].{bus_id,bus_type,contact_data}"
+    }
+  ],
+  "limitations": [
+    "同账号、同时间、3个主体样本；不能证明所有数据覆盖和合同计价相同。",
+    "金额为0不等于未消耗套餐配额。"
+  ]
+}

@@ -1,0 +1,164 @@
+{
+  "date": "2026-11-21",
+  "timezone": "Asia/Hong_Kong",
+  "scope": "Observed trial UI and real basic-tier service; not a controlled accuracy test",
+  "tradewind": {
+    "task_stopped": true,
+    "completed_naturally": false,
+    "emails_sent": 0,
+    "sms_sent": 0,
+    "contacts_reached": 0,
+    "preview_companies": [
+      "Marmetal",
+      "Great Lakes Specialty Metals",
+      "Corrosion Materials",
+      "High Performance Alloys, Inc.",
+      "Altemp Alloys, Inc.",
+      "Ram Alloys"
+    ],
+    "observed_task_companies": [
+      {
+        "name": "Marmetal Industries",
+        "contact_rows": 6,
+        "rows_with_email": 6,
+        "observed_roles": {
+          "president": 1,
+          "sales": 4,
+          "general_business": 1
+        }
+      },
+      {
+        "name": "Corrosion Materials",
+        "contact_rows": 1,
+        "rows_with_email": 0
+      },
+      {
+        "name": "High Performance Alloys, Inc.",
+        "contact_rows": 1,
+        "rows_with_email": 1
+      },
+      {
+        "name": "Great Lakes Specialty Metals",
+        "contact_rows": 1,
+        "rows_with_email": 0
+      }
+    ],
+    "imagestar_domain_search": {
+      "candidate_rows": 4,
+      "purchasing_filtered_rows": 0,
+      "unlocked": false
+    },
+    "customs": {
+      "product": "food pan",
+      "date_start": "2023-11-21",
+      "date_end": "2026-11-20",
+      "country_filter": "all; country selection paywalled",
+      "observed_page_count": 1330,
+      "first_page_rows": 10,
+      "verified_total_rows": null
+    },
+    "exhibition": {
+      "reported_catalog_entries": 256,
+      "name": "Wire & Tube",
+      "year": 2024,
+      "reported_exhibitors": 2723,
+      "preview_rows": 5,
+      "full_list_unlocked": false
+    }
+  },
+  "voken": {
+    "job_id": "25dda39a4a324c159ea1962d19119ec7",
+    "configuration": {
+      "name": "TradeWind对标-美国镍合金经销商",
+      "market": "美国",
+      "product": "nickel alloy",
+      "buyer_role": "distributor",
+      "target_count": 10,
+      "exclude_keywords": [
+        "物流货代",
+        "终端零售",
+        "仅做铝合金"
+      ],
+      "instructions": "寻找美国镍基合金库存经销商。必须经营镍基合金，可兼营不锈钢；排除物流货代、终端零售和仅做铝合金的企业。交付企业官网、原文证据和已有公开商务入口。与信风同画像对照，数量不足如实返回。"
+    },
+    "status": "partial",
+    "warnings": [
+      "source_unavailable"
+    ],
+    "source_count": 64,
+    "company_count": 8,
+    "leads_with_email": 0,
+    "leads_with_quote": 4,
+    "dated_future_demand_count": 0,
+    "leads": [
+      {
+        "name": "Rolled Alloys, Inc.",
+        "location": "Maumee, OH",
+        "role": "distributor",
+        "quote": "Nickel, stainless, duplex stainless, titanium and cobalt inventory is sold in grade-specific plate, sheet, bar, pipe, tubing, fittings and welding forms",
+        "source_url": "https://mfr.io/rolledalloys"
+      },
+      {
+        "name": "Ace Alloys, LLC.",
+        "location": "Catoosa, OK",
+        "role": "distributor",
+        "quote": "We specialize in nickel alloy bar stock and Pump Shaft Quality (PSQ) materials",
+        "source_url": "https://profiles.crustdata.com/company/ace-alloys-llc"
+      },
+      {
+        "name": "Ryerson Inc.",
+        "location": "Chicago, IL",
+        "role": "distributor",
+        "quote": "Supplier of nickel and nickel alloys in the form of rods, bars, sheets, strips, pipes or coils.",
+        "source_url": "https://www.thomasnet.com/company/ryerson-inc-10051998/profile?cov=GT&heading=53701603&pdtl=V&what=Geodesic+Domes&coverage_area=GT"
+      },
+      {
+        "name": "Rockwell Industries International Corp.",
+        "location": "80 Newtown Rd, Plainview, NY",
+        "role": "distributor",
+        "quote": "",
+        "source_url": "https://www.scrapmonster.com/company/rockwell-industries-international-corp/53367"
+      },
+      {
+        "name": "Special Quality Alloys Inc.",
+        "location": "19079 Belleau Wood Drive, Humble, TX",
+        "role": "distributor",
+        "quote": "Our expertise is the distribution of bars and forgings in nickel-based superalloys, duplex, super duplex, martensitic and high strength stainless steels.",
+        "source_url": "https://www.scrapmonster.com/company/special-quality-alloys-inc/96042"
+      },
+      {
+        "name": "National Specialty Alloys, LLC",
+        "location": "4295 Hamilton Mill Rd Ste 200, Buford, GA",
+        "role": "distributor",
+        "quote": "",
+        "source_url": "https://www.msci.org/members-map/?chapter=Mid-South&current=1&lob=Stainless%2BNickel%2BAlloy&memberType=Service%2BCenter"
+      },
+      {
+        "name": "United Performance Metals",
+        "location": "3475 Symmes Rd, Hamilton, OH",
+        "role": "distributor",
+        "quote": "",
+        "source_url": "https://www.msci.org/members-map/?chapter=&lob=Stainless%2BNickel%2BAlloy&memberType=Service%2BCenter&current=1"
+      },
+      {
+        "name": "Midalloy Specialty Materials",
+        "location": "Fenton, MO / Houston, TX",
+        "role": "distributor",
+        "quote": "",
+        "source_url": "https://linesight-ai.com/directory/midalloy-specialty-materials"
+      }
+    ],
+    "marmetal_research": {
+      "status": "succeeded",
+      "pre_fix_candidates": 1,
+      "post_fix_eligible_candidates": 0
+    }
+  },
+  "offline_replay": {
+    "high_performance_alloys": {
+      "before": 6,
+      "after": 3,
+      "scope": "Filtering real stored results; not newly discovered contacts"
+    }
+  }
+}

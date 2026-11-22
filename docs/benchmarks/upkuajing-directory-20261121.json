@@ -1,0 +1,57 @@
+{
+  "observed_date": "2026-11-21",
+  "environment": "local real-provider integration",
+  "provider": "upkuajing",
+  "billing": {"mode": "PLAN", "reported_milli_cny": 0, "quota_consumed": true, "free_service_claimed": false},
+  "company_query": {"company": "Marmetal", "country": "US", "require_email": true, "returned_records": 2, "same_name_records_merged": false},
+  "selected_company": {
+    "name": "marmetal industries llc",
+    "country": "US",
+    "public_sales_email_returned": true,
+    "emails": 1,
+    "phones": 1,
+    "socials": 1,
+    "website_values": 2,
+    "website_values_include_same_domain_variants": true,
+    "whatsapp_confirmed": false,
+    "saved_to_crm": true,
+    "primary_contact_adopted_when_empty": true
+  },
+  "people_query": {
+    "returned_records": 5,
+    "records_with_email_inventory": 0,
+    "names": ["michael oxley", "william tomaszewski", "stephanie zinno", "candice stover", "jerry lynd"],
+    "tradewind_person_name_overlap": ["william tomaszewski", "candice stover"],
+    "actual_person_unlocks": 2,
+    "person_unlocks_with_any_contact": 0,
+    "personal_email_parity_demonstrated": false
+  },
+  "trade_query": {
+    "product": "food pan",
+    "buyer_country": "US",
+    "date_start": "2025-11-21",
+    "date_end": "2026-11-20",
+    "page_sizes": [20, 20],
+    "distinct_record_ids": 40,
+    "overlap_between_pages": 0,
+    "logistics_noise_present": true,
+    "directly_comparable_to_tradewind_query": false
+  },
+  "public_preview": {
+    "status": "partial",
+    "companies": 4,
+    "companies_with_quote": 4,
+    "companies_with_email": 0,
+    "companies_with_dated_current_demand": 0,
+    "names": ["Rockwell Industries International Corp", "TW Metals", "Avion Alloys Inc", "Rolled Alloys"],
+    "feedback_save_and_undo_verified": true
+  },
+  "contact_priority_automatic_run": {
+    "punctuation_match_issue_fixed": true,
+    "latest_live_retry_leads": 0,
+    "latest_live_retry_paid_calls": 0,
+    "reason": "selected public source did not support full legal company name",
+    "stable_live_email_enrichment_demonstrated": false
+  },
+  "validation": {"full_regression_passed": 129, "post_normalization_acquisition_tests_passed": 11, "production_deployed": false, "external_messages_sent": 0}
+}

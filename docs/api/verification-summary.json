@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-22",
+  "api_operations": 116,
+  "api_schemas": 123,
+  "backend_regression": {
+    "passed": 177,
+    "failed": 0
+  },
+  "browser_e2e": {
+    "passed": 10,
+    "failed": 0,
+    "duration_ms": 54335.244999999995
+  },
+  "frontend_checks": {
+    "passed": 4,
+    "failed": 0
+  },
+  "build": "passed",
+  "environment": "isolated temporary SQLite, real HTTP, separate headless Edge; deterministic external provider fixtures",
+  "production_deployed": false
+}

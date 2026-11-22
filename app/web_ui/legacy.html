@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>微元 · AI 外贸拓客</title>
+    <link rel="stylesheet" href="__ASSET_PREFIX__/app-assets/app.css?v=20261121-workbench2" />
+    <script src="__ASSET_PREFIX__/app-assets/app.js?v=20261121-workbench2" defer></script>
+    <script src="__ASSET_PREFIX__/app-assets/account.js?v=20261121-workbench2" defer></script>
+    <script src="__ASSET_PREFIX__/app-assets/discovery.js?v=20261121-workbench2" defer></script>
+    <script src="__ASSET_PREFIX__/app-assets/directory.js?v=20261121-workbench2" defer></script>
+    <script src="__ASSET_PREFIX__/app-assets/workbench.js?v=20261121-workbench2" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#page-title">跳转到主要内容</a>
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+    <section id="auth" class="auth-layout">
+      <div class="auth-story">
+        <a class="brand" href="#"><svg class="brand-mark" viewBox="0 0 48 54" aria-hidden="true"><path d="M24 3 45 15v24L24 51 3 39V15Z" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="m12 17 9 22h6l9-22h-7l-5 14-5-14Z" fill="currentColor"/></svg><span class="brand-lockup">微元<span>Voken</span></span></a>
+        <div>
+          <p class="eyebrow">为小团队，打开大市场</p>
+          <h1>从找到客户，<br />到开启对话。</h1>
+          <p>
+            AI 帮你找线索、核对来源、写好第一封信。<br />把时间留给值得跟进的人。
+          </p>
+          <div class="story-steps">
+            <span>01 发现</span><span>02 核实</span><span>03 跟进</span>
+          </div>
+        </div>
+        <small>公开信息优先 · 数据按需增强 · 每一步有据可查</small>
+      </div>
+      <div class="auth-card">
+        <p class="eyebrow">你的海外业务工作台</p>
+        <h2>欢迎回来</h2>
+        <p class="muted">登录后继续你的客户开发。</p>
+        <form id="login-form">
+          <label
+            >手机号<input
+              name="phone"
+              type="tel"
+              autocomplete="username"
+              required
+              placeholder="中国大陆手机号" /></label
+          ><label
+            >密码<input
+              name="password"
+              type="password"
+              minlength="8"
+              autocomplete="current-password"
+              required /></label
+          ><button class="primary" type="submit">进入工作台 →</button>
+        </form>
+        <details id="register-panel">
+          <summary>创建账号</summary>
+          <form id="register-form">
+            <label>手机号<input name="phone" type="tel" required /></label
+            ><label
+              >密码<input
+                name="password"
+                type="password"
+                minlength="8"
+                autocomplete="new-password"
+                required /></label
+            ><button type="button" id="request-code">获取验证码</button
+            ><label
+              >验证码<input
+                name="code"
+                required
+                autocomplete="one-time-code" /></label
+            ><input name="challenge_id" type="hidden" /><button
+              class="primary"
+              type="submit"
+            >
+              注册账号
+            </button>
+          </form>
+          <p id="verification-hint" class="hint">请输入手机收到的验证码。</p>
+        </details>
+        <details id="reset-panel">
+          <summary>忘记密码</summary>
+          <form id="reset-form" data-extension="true">
+            <label
+              >重置密码的手机号<input name="phone" type="tel" required /></label
+            ><button type="button" id="reset-code">发送重置验证码</button
+            ><label
+              >短信验证码<input
+                name="code"
+                required
+                autocomplete="one-time-code" /></label
+            ><input name="challenge_id" type="hidden" /><label
+              >新密码<input
+                name="new_password"
+                type="password"
+                minlength="8"
+                maxlength="128"
+                required
+                autocomplete="new-password" /></label
+            ><button type="submit">重置密码并退出旧设备</button>
+          </form>
+        </details>
+        <p id="private-beta-note" class="hint" hidden>
+          当前为私测，账号由运营人员开通。已有账号可直接登录。
+        </p>
+      </div>
+    </section>
+    <div id="workspace" class="app-layout" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#overview"><svg class="brand-mark" viewBox="0 0 48 54" aria-hidden="true"><path d="M24 3 45 15v24L24 51 3 39V15Z" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="m12 17 9 22h6l9-22h-7l-5 14-5-14Z" fill="currentColor"/></svg><span class="brand-lockup">微元<span>Voken</span></span></a>
+        <p class="sidebar-caption">WORKSPACE · 业务空间</p>
+        <nav aria-label="主导航">
+          <button data-tab="overview">◫ 概况</button>
+          <button data-tab="discover">＋ 找客户</button>
+          <button data-tab="jobs">☷ 任务管理</button>
+          <button data-tab="workbench">▤ 客户工作台</button>
+          <button data-tab="customers">▤ 客户档案</button>
+          <button data-tab="sources">◎ 商业情报查询</button>
+          <details id="tools-nav" class="tools-nav"><summary>工具</summary>
+            <button data-tab="directory">找联系人 / 企业</button>
+            <button data-tab="company">我的企业信息</button>
+            <button data-tab="mail">邮件管理</button>
+          </details>
+        </nav>
+        <div class="sidebar-bottom">
+          <button data-tab="costs" id="balance">— 点数</button><small>先筛选，再增强</small
+          ><button id="logout">退出登录</button>
+        </div>
+      </aside>
+      <main>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">VOKEN / 海外业务工作台</p>
+            <h1 id="page-title" tabindex="-1">概况</h1>
+          </div>
+          <button id="refresh" title="刷新当前页面数据">↻ 刷新数据</button>
+        </header>
+        <section id="overview" class="tab-panel">
+          <div class="welcome">
+            <div>
+              <p class="eyebrow">下一段增长，从一次对话开始</p>
+              <h2>让下一次增长，<br />从<em>对的客户</em>开始。</h2>
+              <p>从产品与市场出发，建立有来源、可跟进的客户清单。</p>
+              <div class="actions"><button data-tab="discover" class="light">创建找客户任务 ↗</button><button data-tab="customers" class="hero-secondary">查看客户管理 →</button></div>
+            </div>
+            <div class="assistant-preview" aria-label="客户开发流程">
+              <div class="assistant-heading"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="4"/><path d="M12 2v4M8 12h.01M16 12h.01M8 16c2 2 6 2 8 0M1 11v5M23 11v5"/></svg><b>你的 AI 拓客助手</b></div>
+              <div class="assistant-step"><span>01</span><div><b>理解产品与市场</b><small>从企业资料明确客户目标</small></div></div>
+              <div class="assistant-step"><span>02</span><div><b>核对线索与来源</b><small>保留证据，按需补充信息</small></div></div>
+              <div class="assistant-step"><span>03</span><div><b>准备下一次对话</b><small>由你审阅，再决定联系</small></div></div>
+            </div>
+          </div>
+          <div class="workflow-guide" aria-label="客户开发四步流程">
+            <button data-tab="discover"><span>01</span><b>搜索客户</b><small>描述产品与市场，创建任务</small></button>
+            <button data-tab="jobs"><span>02</span><b>筛选客户</b><small>查看结果，核对匹配与来源</small></button>
+            <button data-tab="customers"><span>03</span><b>保存客户</b><small>建立客户库，安排下一次跟进</small></button>
+            <button data-tab="mail"><span>04</span><b>邮件触达</b><small>审阅开发信，确认后发送</small></button>
+          </div>
+          <div id="stats" class="stats"></div>
+          <div class="grid-two">
+            <div class="panel">
+              <h3>今天值得推进的事</h3>
+              <div id="next-actions"></div>
+            </div>
+            <div class="panel">
+              <h3>一条清晰的开发路径</h3>
+              <ol class="path">
+                <li>
+                  <b>完善企业资料</b><span>告诉 AI 你卖什么、优势是什么。</span>
+                </li>
+                <li>
+                  <b>发现并筛选客户</b
+                  ><span>检查证据；需要时再购买补充数据。</span>
+                </li>
+                <li>
+                  <b>保存、写信、记录反馈</b
+                  ><span>开发信经你审阅，通过自有邮箱发送。</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </section>
+        <section id="discover" class="tab-panel" hidden>
+          <div class="discovery-mode-bar">
+            <div><h2>创建一个找客户任务</h2><p class="hint">点选产品、市场和客户类型，Agent 帮你一次整理成任务，确认后开始找客户。</p></div>
+            <div class="mode-switch" role="tablist" aria-label="任务创建方式">
+              <button id="discovery-chat-tab" type="button" role="tab" aria-selected="true" aria-controls="discovery-chat-pane" data-discovery-mode="chat">Agent 引导（推荐）</button>
+              <button id="discovery-form-tab" type="button" role="tab" aria-selected="false" aria-controls="discovery-form-pane" tabindex="-1" data-discovery-mode="form">自行填写表单</button>
+            </div>
+          </div>
+          <div class="grid-two discovery-layout">
+            <div id="discovery-form-pane" role="tabpanel" aria-labelledby="discovery-form-tab" hidden>
+            <form id="discovery-form" class="panel">
+              <p class="eyebrow">告诉 AI 你的目标</p>
+              <h2>下一批客户在哪里？</h2>
+              <label
+                >任务名称<input
+                  name="name"
+                  required
+                  maxlength="80"
+                  placeholder="例如：德国商用照明渠道"
+              /></label>
+              <div class="form-row">
+                <label
+                  >目标市场<input
+                    name="market"
+                    maxlength="100"
+                    required
+                    placeholder="德国" /></label
+                ><label
+                  >产品<input
+                    name="product"
+                    maxlength="150"
+                    required
+                    placeholder="商用 LED 筒灯"
+                /></label>
+              </div>
+              <label
+                >客户角色<select name="buyer_role">
+                  <option value="any">不限，按描述筛选</option>
+                  <option value="distributor">分销商 / 进口商</option>
+                  <option value="manufacturer">制造商</option>
+                  <option value="brand">终端客户 / 品牌</option>
+                  <option value="service_provider">服务商 / 工程商</option>
+                  <option value="public_buyer">政府 / 公共机构采购方</option>
+                </select></label
+              ><label
+                >客户特征与筛选要求（选填）<textarea
+                  name="instructions"
+                  maxlength="1600"
+                  rows="3"
+                  placeholder="寻找有实体门店的照明经销商，排除制造商和货代。优先有供应商招募信息的企业。"
+                ></textarea>
+              </label>
+
+
+              <div class="form-row">
+                <label
+                  >目标数量<input
+                    name="target_count"
+                    type="number"
+                    min="1"
+                    max="30"
+                    value="10"
+                    required /></label
+                ><label
+                  >HS 编码（选填）<input
+                    name="hs_code"
+                    pattern="[0-9]{6,10}"
+                    placeholder="6–10 位数字"
+                /></label>
+              </div>
+              <details class="advanced-options"><summary>更多筛选条件（选填）</summary><label
+                >理想客户官网（选填）<input
+                  name="seed_website"
+                  type="url"
+                  maxlength="500"
+                  placeholder="https://example-buyer.com" /></label
+              ><label
+                >排除条件（逗号分隔）<input
+                  name="exclude_keywords"
+                  placeholder="货代、无关产品、只做零售" /></label
+              ><label>更多参考客户官网（选填，最多5个，每行一个）<textarea name="reference_websites" rows="2" placeholder="https://buyer-one.com&#10;https://buyer-two.com"></textarea></label><label>排除客户域名（逗号分隔，含子域名）<input name="exclude_domains" placeholder="competitor.com, existing-customer.com" /></label></details>
+              <label
+                >数据方案<select name="tier">
+                  <option value="basic">基础发现 · 公开搜索</option>
+                  <option value="enhanced">
+                    增强发现 · 公开搜索 + 跨境魔方
+                  </option>
+                  <option value="enhanced_contacts">增强发现 · 优先补前2家企业的联系方式</option>
+                </select></label
+              ><label class="check"
+                ><input name="ted" type="checkbox" />同时查近 90 天 TED
+                官方招标（原生接口无单次数据费；仍须核对时效及投标资格）</label
+              ><label class="check" id="paid-label" hidden
+                ><input name="paid" type="checkbox" />同意预占最多 600
+                数据点（对应 ¥6
+                数据预算），另加下方平台点数。按明确回传费用结算并释放差额，异常回传不向钱包追加扣点。</label
+              ><div class="actions"><button id="discovery-preview" type="button">先看最多5家真实样本</button><button class="primary" type="submit">开始找客户 →</button></div>
+              <p id="discovery-price" class="hint"></p>
+            </form>
+            </div>
+            <div id="discovery-chat-pane" class="panel discovery-chat" role="tabpanel" aria-labelledby="discovery-chat-tab">
+              <div class="chat-heading"><div><p class="eyebrow">VOKEN AGENT</p><h2>先聊聊，你想找谁？</h2></div><button id="discovery-chat-reset" type="button">重新开始</button></div>
+              <p class="hint">先确认产品和市场，其他条件可用默认值。需要补充时，点选卡片即可，不必反复打字。</p>
+              <div class="builder-steps" aria-label="任务构建流程"><span id="builder-step-brief" aria-current="step">1 确认目标</span><span id="builder-step-plan">2 核对方案</span><span>3 创建任务</span></div>
+              <div id="discovery-chat-messages" class="chat-messages" role="log" aria-label="任务规划对话" aria-live="polite"></div>
+              <div id="discovery-chat-brief"></div>
+              <div id="discovery-chat-questions" aria-live="polite"></div>
+              <div id="discovery-chat-examples" class="chat-examples">
+                <button type="button" data-discovery-example="我们做商用 LED 灯具，想找德国的分销商，先找 10 家，排除只做零售的公司。">试填：德国照明分销商</button>
+              </div>
+              <details id="discovery-free-text"><summary>也可以直接描述需求 / 补充要求</summary>
+                <form id="discovery-chat-form" data-extension="discovery">
+                  <label for="discovery-chat-input">告诉 Agent 你的想法</label>
+                  <textarea id="discovery-chat-input" name="content" rows="3" maxlength="2400" placeholder="例如：我们生产商用 LED 灯具，想找德国分销商，排除零售商……" required></textarea>
+                  <div class="chat-composer-footer"><small>只整理方案，确认创建前不会启动找客户任务。</small><button type="submit" class="primary">整理需求 ↑</button></div>
+                </form>
+              </details>
+              <div id="discovery-chat-error" class="chat-error" role="alert" hidden></div>
+              <button id="discovery-chat-retry" type="button" hidden>重试整理（保留刚才的选择）</button>
+              <div id="discovery-chat-plan"></div>
+              <p class="hint">对话仅保留在当前页面，刷新或退出后清空。可随时修改条件或改用表单。</p>
+            </div>
+            <div class="panel discovery-guide">
+              <p class="eyebrow">每一条线索，都有出处</p>
+              <h3>任务创建小贴士</h3><p class="hint">只需确认产品与市场，即可整理方案。未指定时先找10家，找客完成后到任务管理筛选结果。</p>
+              <details><summary>了解找客流程与数据方案</summary><div class="explain">
+                <b>01 / 公开搜索先行</b>
+                <p>AI 拆解市场与产品关键词，读取来源，提取可追溯线索。</p>
+                <b>02 / 证据分开看</b>
+                <p>
+                  潜在匹配、公开采购信号、历史进口记录分别展示；历史交易不代表当前需求。
+                </p>
+                <b>03 / 小批量补全</b>
+                <p>
+                  增强档按预算补充候选、贸易核验和联系方式；无需购买完整数据库。
+                </p>
+                <b>04 / 你来决定下一步</b>
+                <p>保存值得跟进的客户，再生成开发信和设置跟进。</p>
+              </div>
+              </details><h3>已有任务</h3>
+              <div id="recent-discoveries" class="stack"></div>
+              <hr />
+              <details><summary>定期更新客户线索（可选）</summary>
+              <form id="schedule-form">
+                <label
+                  >选择已建任务<select
+                    name="agent_id"
+                    id="schedule-agent"
+                    required
+                  ></select
+                ></label>
+                <div class="form-row">
+                  <label
+                    >每隔多少天<input
+                      name="interval_days"
+                      type="number"
+                      min="1"
+                      max="90"
+                      value="14"
+                      required /></label
+                  ><label
+                    >后续运行次数<input
+                      name="remaining_runs"
+                      type="number"
+                      min="1"
+                      max="365"
+                      value="4"
+                      required
+                  /></label>
+                </div>
+                <p class="hint">
+                  只运行基础档，每次按拓客报价消耗平台点数。首次在一个周期后执行；不会自动购买海关或联系方式数据。
+                </p>
+                <button type="submit">启用定期更新</button>
+              </form>
+              <div id="schedule-list" class="stack"></div></details>
+            </div>
+          </div>
+        </section>
+        <section id="directory" class="tab-panel" hidden>
+          <details class="panel"><summary>按产品查询历史贸易记录</summary><form id="trade-form" data-extension="directory">
+            <div class="form-row"><label>英文产品词<input name="product" maxlength="150" placeholder="food pan" /></label><label>HS 编码（可代替产品词）<input name="hs_code" pattern="[0-9]{6,10}" /></label></div>
+            <div class="form-row"><label>买方国家（选填）<input name="buyer_country" pattern="[A-Z]{2}" placeholder="US" /></label><label>买方名称（选填）<input name="buyer" maxlength="200" /></label></div>
+            <div class="form-row"><label>原产国（选填）<input name="origin_country" pattern="[A-Z]{2}" placeholder="CN" /></label><label>抵运国（选填）<input name="arrival_country" pattern="[A-Z]{2}" placeholder="US" /></label></div>
+            <div class="form-row"><label>开始日期<input name="date_start" type="date" required /></label><label>结束日期<input name="date_end" type="date" required /></label></div>
+            <label class="check"><input type="checkbox" name="paid" required />同意本页最多预占150数据点（¥1.50预算），另加平台点数</label><button type="submit">查询一页历史贸易</button><p class="hint">每页最多20条。可能包含混装货物和物流公司，历史记录不等于当前采购需求。</p>
+          </form></details>
+          <div class="grid-two">
+            <form id="directory-form" class="panel" data-extension="directory">
+              <p class="eyebrow">从企业走到具体的人</p><h2>补齐客户与联系方式</h2>
+              <p class="hint">先查公司或岗位，核对主体后单独解锁联系方式。库存数量不等于已取得邮箱。</p>
+              <div id="directory-selected" class="notice" hidden></div>
+              <label>查询对象<select name="kind"><option value="company">企业</option><option value="people">人物与岗位</option></select></label>
+              <label>公司名称<input name="company_name" maxlength="180" placeholder="Marmetal Industries" /></label>
+              <label>公司官网（选填）<input name="website" type="url" maxlength="500" placeholder="https://www.marmetal.com" /></label>
+              <div class="form-row"><label>国家代码（选填）<input name="country" pattern="[A-Z]{2}" maxlength="2" placeholder="US" /></label><label>产品词（选填）<input name="product" maxlength="150" placeholder="nickel alloy" /></label></div>
+              <label>职位词（找人时使用，逗号分隔）<input name="titles" placeholder="purchasing, procurement, president" /></label>
+              <label class="check"><input name="require_email" type="checkbox" />只查上游标记有邮箱库存的记录（仍需解锁与核对）</label>
+              <label class="check"><input name="paid" type="checkbox" required />同意本页最多预占150数据点（¥1.50预算），另加平台点数；套餐扣量单独展示</label>
+              <div class="actions"><button class="primary" type="submit">查询这一页</button><button id="directory-reset" type="button">清除已选企业</button></div>
+              <p id="directory-price" class="hint"></p>
+            </form>
+            <div class="panel"><h2>每一步都能核对</h2><ol class="steps"><li>按名称、产品或官网找到企业，查看地区与地址，区分同名主体。</li><li>选中企业后查岗位；销售、总裁与采购角色分别判断。</li><li>只解锁你选中的一家企业或一个人，保留邮箱、电话、社媒和上游验证标记。</li><li>核对公司归属后存入客户的一对多联系人档案。</li></ol><p class="hint">分页按需发起，不自动翻页或批量解锁。不会自动外发邮件。</p></div>
+          </div>
+        </section>
+        <section id="sources" class="tab-panel" hidden>
+          <div class="section-intro"><h2>你想了解什么？</h2><p class="muted">查企业背景、找采购机会，或了解市场。选一个目的，再输入你关心的企业或产品。</p></div>
+          <div class="intent-grid" role="group" aria-label="查询目的">
+            <button type="button" data-intent="identity" aria-pressed="true"><b>查企业背景</b><span>核对企业登记与身份信息</span></button>
+            <button type="button" data-intent="procurement" aria-pressed="false"><b>找采购机会</b><span>查公开招标与项目公告</span></button>
+            <button type="button" data-intent="market" aria-pressed="false"><b>了解市场</b><span>查贸易统计与市场规则</span></button>
+            <button type="button" data-intent="risk" aria-pressed="false"><b>查产品风险</b><span>查公开召回与安全公告</span></button>
+            <button type="button" data-intent="research" aria-pressed="false"><b>查企业动态与目录</b><span>了解企业披露、行业与展会信息</span></button>
+          </div>
+          <div class="grid-two intelligence-layout">
+            <form id="source-form" class="panel">
+              <h3 id="intent-title">查企业背景</h3>
+              <label><span id="source-query-label">企业名称</span><input name="query" required maxlength="120" placeholder="例如：Siemens（建议使用英文全称）" /></label>
+              <p id="source-query-help" class="hint"></p>
+              <label>查询范围<select id="source-select" name="source_id" required></select></label>
+              <p id="source-guidance" class="notice" aria-live="polite"></p>
+              <details class="advanced-options"><summary>更多查询条件（选填）</summary>
+                <label>企业或公告所属国家<select name="country"><option value="">不限国家</option><option value="CN">中国</option><option value="US">美国</option><option value="GB">英国</option><option value="DE">德国</option><option value="FR">法国</option><option value="CA">加拿大</option><option value="AU">澳大利亚</option><option value="JP">日本</option><option value="IN">印度</option><option value="SG">新加坡</option><option value="AE">阿联酋</option><option value="SA">沙特阿拉伯</option><option value="ZA">南非</option><option value="BR">巴西</option><option value="MX">墨西哥</option><option value="IT">意大利</option><option value="NL">荷兰</option><option value="ES">西班牙</option><option value="VN">越南</option><option value="KR">韩国</option><option value="ID">印度尼西亚</option><option value="TH">泰国</option><option value="MY">马来西亚</option></select></label>
+                <label>最多显示多少条<input name="limit" type="number" min="1" max="20" value="10" required /></label>
+                <label id="source-time-field">公告时间范围<select name="since_days"><option value="30">最近30天</option><option value="90" selected>最近90天</option><option value="365">最近一年</option></select></label>
+                <label id="source-entity-field">企业类型<select name="entity_category"><option value="GENERAL">一般企业</option><option value="BRANCH">分支机构</option><option value="FUND">基金</option><option value="ALL">全部</option></select></label>
+                <label id="source-stage-field">公告类型<select name="procurement_stage"><option value="tender">招标机会</option><option value="award">历史中标 / 合同</option><option value="all">全部阶段</option></select></label>
+                <details><summary>数据来源与覆盖说明</summary><p id="source-info" class="hint"></p></details>
+              </details>
+              <p id="source-price" class="hint"></p><button id="source-submit" type="submit" class="primary">开始查询 →</button>
+            </form>
+            <div class="panel"><h3>查完以后，怎么用？</h3><ol class="path"><li><b>查看查询结果</b><span>提交后自动进入任务详情，查询会在后台继续。</span></li><li><b>打开原文核对</b><span>企业背景用于核对身份；采购公告需确认截止时间和参与资格。</span></li><li><b>保存并跟进</b><span>结果中有明确企业时，可保存到客户管理。市场统计和风险公告用于研究判断。</span></li></ol><p class="notice">想直接获得一批潜在客户？用「找客户」创建任务更合适。</p><button data-tab="discover">去找客户 →</button><details><summary>查看全部数据来源</summary><div id="source-catalog" class="stack"></div></details></div>
+          </div>
+        </section>
+        <section id="workbench" class="tab-panel" hidden>
+          <div class="section-intro"><h2>把合适的企业，推进到合适的人</h2><p class="muted">企业匹配、目标岗位与邮箱验证分开判断，来源和历史记录随时可查。</p></div>
+          <form id="wb-filter" data-extension="workbench" class="wb-filters">
+            <label>查看方式<select name="mode"><option value="companies">企业</option><option value="contacts">联系人</option></select></label>
+            <label>搜索<input name="q" placeholder="企业、姓名或邮箱" maxlength="200"></label>
+            <label>国家／地区<input name="country_filter" maxlength="100" placeholder="US / 美国"></label>
+            <label>销售阶段<select name="stage"><option value="">全部阶段</option><option value="new">新发现</option><option value="qualified">已筛选</option><option value="contacted">已联系</option><option value="replied">已回复</option><option value="negotiating">洽谈中</option><option value="won">已成交</option><option value="lost">不匹配</option></select></label>
+            <label>标签<input name="tag" maxlength="40"></label>
+            <label>目标岗位<select name="target"><option value="procurement">采购／供应链</option><option value="leadership">企业负责人</option><option value="sales">销售／业务开发</option></select></label>
+            <label>独立邮箱验证<select name="verification"><option value="">全部状态</option><option value="valid">有效</option><option value="invalid">无效／不应联系</option><option value="unknown">未知</option><option value="catch_all">全收域</option><option value="unverified">尚未验证</option></select></label>
+            <label class="check"><input type="checkbox" name="has_email">有完整邮箱</label><label class="check"><input type="checkbox" name="due">到期跟进</label>
+            <label>岗位判断<select name="role_filter"><option value="">全部岗位</option><option value="keyword_match">命中目标关键词</option><option value="needs_review">未命中，待核实</option><option value="unknown">岗位未知</option></select></label>
+            <label class="check"><input type="checkbox" name="ready_only">企业已评审且岗位匹配、邮箱近期有效</label>
+            <button type="submit" class="primary">应用筛选</button>
+          </form>
+          <div class="toolbar"><label>已保存视图<select id="wb-views"><option value="">选择视图</option></select></label><label>视图名称<input id="wb-view-name" maxlength="80" placeholder="例如：美国采购岗位待核查"></label><button id="wb-save-view">保存当前视图</button></div>
+          <div id="wb-summary" class="notice" aria-live="polite"></div><div id="wb-list" class="stack" aria-live="polite"></div>
+          <div class="pagination"><button id="wb-prev">上一页</button><span id="wb-page"></span><button id="wb-next">下一页</button></div>
+          <div id="wb-history" class="panel" hidden></div>
+          <details class="panel"><summary>批量安排跟进 · 多轮提醒</summary><form id="wb-followup" data-extension="workbench"><label>首次提醒<input name="due_at" type="datetime-local" required></label><label>后续提醒（相对首次的天数）<input name="intervals" placeholder="3,7,14"></label><label>跟进目标<input name="objective" maxlength="500" required placeholder="审阅开发信，核对采购职责"></label><p class="hint">选择上方企业后安排提醒；收到回复、退信或停止联系时暂停后续提醒。每封邮件仍需单独审阅确认。</p><button type="submit">为选中企业安排</button></form></details>
+          <h3>跟进待办</h3><div id="wb-tasks" class="stack"></div>
+          <details class="panel"><summary>产品与客群方向</summary>
+            <form id="wb-product" data-extension="workbench"><label>产品名称<input name="name" maxlength="150" required></label><label>产品与用途<textarea name="description" maxlength="2000" required></textarea></label><label>核心优势<textarea name="value" maxlength="1000"></textarea></label><button type="submit">新增产品档案</button></form>
+            <form id="wb-cohorts" data-extension="workbench"><label>产品<select name="product_id" id="wb-products" required></select></label><label>目标市场<input name="market" maxlength="100" required></label><button type="submit">推荐买家客群</button></form><div id="wb-cohort-results"></div>
+          </details>
+          <details class="panel"><summary>导入已有客户名单 · 先预览再确认</summary><p class="hint">CSV、XLSX 或可提取表格文本的 PDF；最多 200 行。PDF 需表头及制表符或竖线分列，不支持扫描件。已有同名同地区客户只复用，不覆盖。</p>
+            <form id="wb-upload" data-extension="workbench"><label>客户名单<input type="file" name="file" accept=".csv,.xlsx,.pdf" required></label><button type="submit">解析并预览</button></form><div id="wb-import-preview"></div>
+          </details>
+          <details class="panel"><summary>收件归档 · 回复、退信与停止联系</summary><p id="wb-inbox-capability" class="hint"></p><button id="wb-sync-inbox">同步收件箱</button>
+            <form id="wb-eml" data-extension="workbench"><label>邮件文件<input type="file" name="file" accept=".eml" required></label><button type="submit">预览邮件</button></form><div id="wb-inbox"></div>
+          </details>
+        </section>
+        <section id="customers" class="tab-panel" hidden>
+          <div class="toolbar">
+            <input
+              id="customer-query"
+              aria-label="搜索公司名"
+              placeholder="搜索公司名"
+            /><select id="stage-filter" aria-label="销售阶段">
+              <option value="">全部阶段</option></select
+            ><label class="check"
+              ><input id="due-filter" type="checkbox" />只看待跟进</label
+            ><button id="filter-customers">筛选</button
+            ><button id="export">导出 CSV</button
+            ><button id="show-import">导入客户</button>
+          </div>
+          <div id="customer-count" class="hint"></div>
+          <div class="customer-layout">
+            <div id="customer-list" class="stack"></div>
+            <div id="customer-detail" class="panel detail">
+              <div class="empty"><span class="empty-symbol" aria-hidden="true">◎</span><h3>把线索变成下一步行动</h3><p>选择一位客户，核对来源、撰写邮件或安排跟进。</p></div>
+            </div>
+          </div>
+          <div class="pagination">
+            <button id="prev">上一页</button><span id="page-number"></span
+            ><button id="next">下一页</button>
+          </div>
+          <details id="import-panel" class="panel">
+            <summary>导入你的客户名单</summary>
+            <p class="hint">
+              粘贴带表头的 CSV，支持 name, location, website, contact,
+              source_url, source_note。每批最多 200 条。来源说明 source_note
+              必填，可用下方默认说明补齐。不会验证邮箱可投递性。
+            </p>
+            <form id="import-form">
+              <label
+                >默认来源说明<input
+                  name="source_note"
+                  required
+                  maxlength="1000"
+                  placeholder="例如：本公司在 2026 年展会收集的商务名片" /></label
+              ><label
+                >CSV 内容<textarea
+                  name="csv"
+                  rows="8"
+                  required
+                  placeholder="name,location,website,contact&#10;Example Buyer,US,https://example.com,sales@example.com"
+                ></textarea></label
+              ><button type="submit" class="primary">导入名单</button>
+            </form>
+          </details>
+        </section>
+        <section id="jobs" class="tab-panel" hidden>
+          <div class="toolbar"><p class="muted">查看任务进度，打开详情筛选客户、核对来源。</p><button class="primary" data-tab="discover">＋ 创建找客户任务</button></div>
+          <div class="toolbar"><label>任务类型<select id="job-type-filter"><option value="">全部类型</option><option value="prospecting">找客户</option><option value="intelligence">商业情报</option><option value="outreach_draft">邮件草稿</option></select></label><label>任务状态<select id="job-status-filter"><option value="">全部状态</option><option value="active">进行中</option><option value="done">已完成</option><option value="failed">失败 / 已取消</option></select></label></div>
+          <p id="job-count" class="hint"></p><div id="job-list" class="task-grid"></div>
+        </section>
+        <section id="job-view" class="tab-panel" hidden>
+          <div class="toolbar"><button data-tab="jobs">← 返回任务列表</button><span class="hint">任务管理 / 任务详情</span></div>
+          <div id="job-detail" class="panel"></div>
+        </section>
+        <section id="mail" class="tab-panel" hidden>
+          <div class="section-intro"><h2>从草稿到发送，在这里管理</h2><p class="muted">先在客户档案生成开发信，再打开草稿审阅和发送。</p><button data-tab="customers">选择客户写邮件 →</button></div>
+          <div class="panel"><h3>邮件草稿</h3><div id="mail-drafts" class="task-grid"></div></div>
+          <details class="panel" open><summary>自有邮箱发送记录</summary><div id="mail-deliveries"></div></details>
+        </section>
+        <section id="company" class="tab-panel" hidden>
+          <div class="panel">
+            <h2>让 AI 先了解你的企业</h2>
+            <p class="hint">
+              任选一种方式开始：输入名称、提供官网或上传文件。AI
+              先生成有原文依据的草案，由你审阅后采用。
+            </p>
+            <div class="intake-grid">
+              <form id="company-name-form" data-extension="true">
+                <span class="route-number">01 / 企业名称</span>
+                <label
+                  >企业名称<input
+                    name="name"
+                    required
+                    minlength="2"
+                    maxlength="200" /></label
+                ><button type="submit">按名称查找官网</button>
+                <div id="company-candidates"></div>
+              </form>
+              <form id="company-website-form" data-extension="true">
+                <span class="route-number">02 / 企业官网</span>
+                <label
+                  >待分析的企业官网<input
+                    name="website"
+                    type="url"
+                    required
+                    maxlength="500"
+                    placeholder="https://" /></label
+                ><button type="submit">读取官网并生成草案</button>
+              </form>
+            <form id="company-upload-form" data-extension="true">
+              <span class="route-number">03 / 介绍文件</span>
+              <label
+                >企业介绍文件<input
+                  name="file"
+                  type="file"
+                  accept=".txt,.md,.docx,.pdf"
+                  required /></label
+              ><button type="submit">上传并分析介绍</button>
+              <p class="hint">
+                支持 TXT、MD、DOCX 和文字型 PDF，最多 50
+                MiB；原文件不保存，提取文本交由模型分析。资料分析目前不扣平台点数。
+              </p>
+            </form>
+            </div>
+            <div id="company-proposal"></div>
+          </div>
+          <div id="company-certification" class="panel"></div>
+          <div class="grid-two">
+            <form id="company-form" class="panel">
+              <p class="eyebrow">让 AI 理解你的生意</p>
+              <h2>我的企业</h2>
+              <label
+                >企业名称<input name="name" required maxlength="200" /></label
+              ><label
+                >官网<input name="website" type="url" maxlength="500" /></label
+              ><label
+                >主营产品<textarea
+                  name="products"
+                  rows="4"
+                  required
+                  maxlength="4000"
+                ></textarea></label
+              ><label
+                >真实优势与可验证能力<textarea
+                  name="advantages"
+                  rows="3"
+                  maxlength="4000"
+                ></textarea></label
+              ><label
+                >对外联系信息<textarea
+                  name="contact_details"
+                  rows="3"
+                  maxlength="2000"
+                  placeholder="发件人、职位、商务邮箱、公司地址"
+                ></textarea></label
+              ><label
+                >销售边界<textarea
+                  name="sales_boundaries"
+                  rows="3"
+                  maxlength="4000"
+                  placeholder="最低订单量、不能承诺的认证或交期"
+                ></textarea></label
+              ><button type="submit" class="primary">保存企业资料</button>
+            </form>
+            <div class="panel">
+              <h3>账号与企业资料</h3>
+              <details>
+                <summary>修改登录密码</summary>
+                <form id="password-change-form" data-extension="true">
+                  <label
+                    >当前密码<input
+                      name="current_password"
+                      type="password"
+                      required
+                      minlength="8"
+                      maxlength="128"
+                      autocomplete="current-password" /></label
+                  ><label
+                    >新登录密码<input
+                      name="new_password"
+                      type="password"
+                      required
+                      minlength="8"
+                      maxlength="128"
+                      autocomplete="new-password" /></label
+                  ><button type="submit">更新密码并退出所有设备</button>
+                </form>
+              </details>
+              <h3>越具体，开发信越贴切</h3>
+              <p class="muted">
+                填写真实产品、客户价值和业务边界。AI
+                会结合客户来源写草稿；发送前请核对产品承诺、收件人和联系理由。
+              </p>
+              <div class="notice">
+                企业名称和主营产品是生成开发信的必要条件。未填写的价格、认证和交期不会作为已知事实提供给
+                AI。
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="costs" class="tab-panel" hidden>
+          <div class="panel">
+            <h2>会员与点数</h2>
+            <div id="billing-note" class="notice"></div>
+            <div id="billing-plans" class="plan-grid"></div>
+            <div id="billing-checkout"></div>
+          </div>
+          <div class="grid-two">
+            <div class="panel">
+              <h3>会员点数领取</h3>
+              <div id="memberships"></div>
+            </div>
+            <div class="panel">
+              <h3>充值与会员订单</h3>
+              <div id="billing-orders"></div>
+            </div>
+          </div>
+          <div id="usage" class="stats"></div>
+          <div class="grid-two">
+            <div class="panel">
+              <h3>任务点数报价</h3>
+              <div id="prices"></div>
+              <p class="hint">
+                平台点数与上游供应商费用是两种口径；提交任务先预占，失败后依账本规则释放。
+              </p>
+            </div>
+            <div class="panel">
+              <h3>低资金成本运行</h3>
+              <div class="explain">
+                <b>复用已获得的信息</b>
+                <p>
+                  同一工作空间的公开搜索和网页结果默认缓存 6
+                  小时，命中时不重复请求上游。
+                </p>
+                <b>增强由你选择</b>
+                <p>
+                  基础档不调用跨境魔方。增强档有单任务预算和平台每日调用上限。
+                </p>
+                <b>用自己的邮箱完成触达</b>
+                <p>
+                  审阅后复制草稿或下载邮件文件，通过自有邮箱发送，回到客户页记录结果。
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>近 30 天上游用量</h3>
+            <div id="provider-usage"></div>
+            <p class="hint">
+              金额是已记录的供应商估算或预留，不含模型金额、服务器与邮箱费用，不是完整账单。上游未知费用不能当作零。模型
+              tokens 由供应商回传，缺失时无法完整计算。
+            </p>
+          </div>
+          <div class="panel">
+            <h3>最近点数流水</h3>
+            <div id="ledger"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
