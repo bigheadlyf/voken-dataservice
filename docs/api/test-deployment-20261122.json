@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-22",
+  "environment": "test",
+  "url": "http://8.163.73.136/api/app",
+  "functional_commit": "f4fa19d570063528ea0a9ae8fbd7c46e5afa4876",
+  "current_release": "/opt/voken-dataservice/releases/20261122-react-api-final",
+  "runtime": "/opt/voken-dataservice/venvs/20261122-react-api-f4fa19d",
+  "migration": {
+    "from": "0006",
+    "to": "0015",
+    "mysql_clone_validation": "passed",
+    "existing_record_counts_preserved": true
+  },
+  "verification": {
+    "linux_backend_tests": 177,
+    "local_browser_e2e_tests": 10,
+    "frontend_checks": 4,
+    "public_http": {
+      "/": 200,
+      "/api/": 200,
+      "/api/app": 200,
+      "/api/docs": 200,
+      "/api/redoc": 200,
+      "/api/health": 200,
+      "/api/openapi.json": 200,
+      "api_operations": 116,
+      "/api/app?legacy=true": 200,
+      "deployed_assets_match_commit": "f4fa19d570063528ea0a9ae8fbd7c46e5afa4876",
+      "asset_sha256": {
+        "app.js": "50b737b4bfac54d219054ce53f62f0b5e71fa2401f482a88473f77b5f84547ef",
+        "main.css": "c123878fce59fa2cd1e7ff27ca8b99df74d7fc0235a3937111b98d30cdea2d65",
+        "react-vendor-ovhI6CXq.js": "7900605c1f8802aa3c7a073dff8d00270cb56e1fb63d6a792e8cb908e6507f91",
+        "antd-vendor-DUugD1BP.js": "47425eff59b548435ada6dfb4ae85d2c663db00807c8f39bfc836bcee8a31d7c"
+      }
+    },
+    "unauthenticated_business_status": 401,
+    "public_browser_automation": "blocked_by_local_client",
+    "external_paid_or_messaging_requests": false
+  },
+  "homepage_and_nginx_unchanged": true,
+  "backup_directory": "/root/voken-backups/20261122-react-api-f4fa19d"
+}
