@@ -358,7 +358,7 @@ def collect_leads(response: dict, sources: list[dict], target: int, *, allow_uno
 def execute_pipeline(run, operation: str, payload: dict) -> str:
     if operation == 'outreach_draft':
         return execute_draft(run, payload)
-    enhanced = operation == 'prospecting' and payload.get('acquisition_tier') == 'enhanced'
+    enhanced = operation == 'prospecting' and payload.get('acquisition_tier') in ('enhanced', 'ai_enhanced')
     if operation == 'prospecting':
         run.result['acquisition_tier'] = payload.get('acquisition_tier', 'basic')
     if operation == 'report':
@@ -487,6 +487,9 @@ def execute_pipeline(run, operation: str, payload: dict) -> str:
             enrich_directory_leads(run, leads, plan)
         elif enhanced and candidates:
             enrich_leads(run, leads)
+        if payload.get('acquisition_tier') == 'ai_enhanced':
+            from app.targeted_contacts import enrich
+            enrich(run, leads, payload)
         run.result['acquisition_summary'] = {'companies': len(leads),
             'companies_with_email': sum(bool(observed_emails(lead.get('contact') or '')) or
                 any(row.get('channel') == 'emails' and row.get('validity') != 2 for row in (lead.get('business_contacts') or {}).get('records', [])) for lead in leads),

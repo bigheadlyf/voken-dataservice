@@ -13,6 +13,19 @@ from app.openapi import JobResponse
 
 router = APIRouter(prefix='/api/v1/workspaces/{workspace_id}/directory', tags=['directory'])
 
+from app.targeted_contacts import TargetedContactRequest, enqueue_targeted
+
+
+@router.post('/targeted-contacts', status_code=202, response_model=JobResponse)
+def targeted_contact_search(body: TargetedContactRequest, request: Request, workspace: ws.WorkspaceAccess,
+                            sessions: ws.Sessions, idempotency_key: ws.IdempotencyKey = None):
+    """按已核对的企业官网检索目标岗位邮箱，最多两次 Hunter 查询，不调用跨境魔方。
+
+    支持本空间 prospect_id，或 company_name+website；须确认企业域名与费用。
+    岗位匹配与邮箱有效性分开标注，异步任务及24小时结果复用，不自动发送邮件。
+    """
+    return enqueue_targeted(body, request, workspace, sessions, idempotency_key)
+
 
 class DirectorySearch(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True, json_schema_extra={'examples': [
@@ -92,7 +105,7 @@ def enqueue(session, workspace, request, operation, payload, key):
     if cached:
         session.add(DirectoryRequest(workspace_id=workspace, idempotency_key=key, request_hash=fingerprint, job_id=cached.id))
         return ws.job_view(cached)
-    if not ws.customs_available(request):
+    if operation != 'targeted_contacts' and not ws.customs_available(request):
         raise HTTPException(503, 'customs_provider_unavailable')
     job = ws.enqueue(session, workspace, request.app.state.settings, operation, payload, key, fingerprint)
     session.add(DirectoryRequest(workspace_id=workspace, idempotency_key=key, request_hash=fingerprint, job_id=job.id))
@@ -197,7 +210,7 @@ def save_directory_contact(body: SaveContact, workspace: ws.WorkspaceAccess, ses
         ws.lock_workspace(session, workspace)
         prospect = get_prospect(session, workspace, body.prospect_id)
         job = ws.get_job(session, workspace, body.job_id)
-        if job.operation != 'directory_contacts' or job.status != 'succeeded':
+        if job.operation not in ('directory_contacts', 'targeted_contacts') or job.status != 'succeeded':
             raise HTTPException(409, 'directory_job_not_ready')
         evidence = (job.result or {}).get('directory', {})
         subject = evidence.get('subject', {})

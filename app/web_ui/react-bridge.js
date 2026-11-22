@@ -2,10 +2,11 @@
 // Explicit adapter for the React views. Legacy scripts stay usable by their original tests.
 (() => {
   Object.assign(titles,{
-    "my-overview":"我的概况", "orders-payments":"订单与收款", "protection-funding":"保障与资金", "ai-capabilities":"AI能力",
+    "my-overview":"我的工作台", "orders-payments":"订单与收款", "protection-funding":"保障与资金", "ai-capabilities":"AI能力",
     overview:"业务概况",discover:"发现客户",directory:"企业与联系人",sources:"商业情报",company:"企业资料",
   });
   let summary = null, loading = 0, workbenchError = "";
+  let dashboardAgents = null, dashboardAgentsError = false;
   const publish = () => window.dispatchEvent(new Event("voken:updated"));
   const originalApi = api;
   api = async function(path, options) {
@@ -20,7 +21,36 @@
     } finally { publish(); }
   };
   const originalClear = clearWorkspaceView;
-  clearWorkspaceView = function() { summary = null; window.__vokenWorkbenchSummary = null; workbenchError = ""; $("#balance").textContent = "— 点数"; originalClear(); publish(); };
+  clearWorkspaceView = function() {
+    summary = null;
+    dashboardAgents = null;
+    dashboardAgentsError = false;
+    window.__vokenWorkbenchSummary = null;
+    workbenchError = "";
+    $("#balance").textContent = "— 点数";
+    originalClear();
+    publish();
+  };
+  async function loadDashboardAgents() {
+    const session = state.session;
+    if (!session) return;
+    try {
+      const agents = await api(root() + "/agents");
+      if (state.session !== session) return;
+      dashboardAgents = agents;
+      dashboardAgentsError = false;
+    } catch {
+      if (state.session === session) dashboardAgentsError = true;
+    } finally { publish(); }
+  }
+  const originalRefreshTab = refreshTab;
+  refreshTab = async function() {
+    if (state.tab === "my-overview") {
+      await Promise.all([originalRefreshTab(), loadDashboardAgents()]);
+    } else {
+      await originalRefreshTab();
+    }
+  };
   const originalToast = toast;
   toast = function(message, error = false) {
     originalToast(message, error);
@@ -63,6 +93,7 @@
     snapshot() {
       return {session: state.session ? {workspace_id: state.session.workspace_id} : null,
         tab:state.tab, balance:$("#balance").textContent, summary, jobs:[...state.jobs],
+        dashboardAgents, dashboardAgentsError,
         workbench:{...wb, items:[...wb.items], selected:[...wb.selected], filters:wbFilters(),
           summary:window.__vokenWorkbenchSummary || null}, workbenchError, loading:loading>0};
     },

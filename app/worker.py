@@ -51,7 +51,7 @@ class JobRun:
         self.shutdown = worker.shutdown
         self.job_id = job.id
         self.workspace = job.workspace_id
-        self.paid_budget = job.payload.get('paid_budget_milli_cny') if job.operation == 'prospecting' else None
+        self.paid_budget = job.payload.get('paid_budget_milli_cny') if job.operation in ('prospecting', 'targeted_contacts') else None
         self.warnings = []
         self.result = {'retrieved_at': utcnow().replace(tzinfo=timezone.utc).isoformat(), 'warnings': self.warnings}
 
@@ -87,7 +87,7 @@ class JobRun:
                     return previous.result
                 raise ProviderError(previous.error or 'provider_call_requires_reconciliation')
             if endpoint.startswith(('upkuajing_', 'hunter_')):
-                price = (self.settings.hunter_contact_estimate_milli_cny if endpoint.startswith('hunter_')
+                price = (0 if endpoint == 'hunter_domain' else self.settings.hunter_contact_estimate_milli_cny if endpoint.startswith('hunter_')
                          else UPKUAJING_PRICES[endpoint])
                 if self.paid_budget is not None:
                     budget_calls = session.scalars(select(ProviderCall).where(
@@ -271,6 +271,12 @@ class Worker:
                     run.add_warning(warning)
                 run.result['coverage'] = 'matches' if evidence['records'] else 'no_matches'
                 status = 'partial' if run.warnings else 'succeeded'
+            elif job.operation == 'targeted_contacts':
+                from app.targeted_contacts import search
+                run.result['directory'] = search(run, 'targeted', job.payload,
+                    job.payload.get('contact_target', 'procurement'), job.payload.get('contact_titles'))
+                run.result['coverage'] = 'matches' if run.result['directory']['matched_contact_count'] else 'no_target_matches'
+                status = 'succeeded'
             elif job.operation in UPKUAJING_JOBS:
                 if self.customs is None:
                     raise ProviderError('customs_provider_unavailable')

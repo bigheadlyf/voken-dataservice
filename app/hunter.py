@@ -44,22 +44,7 @@ class Hunter:
     def close(self):
         self.client.close()
 
-    def contacts(self, selected):
-        namespace = selected.get('namespace', 'customs_company')
-        identifier = str(selected.get('record_id') or selected.get('company_id') or '')
-        person = namespace == 'directory_person'
-        domain = domain_name(selected.get('website'))
-        company = selected.get('company_name') or (None if person else selected.get('name'))
-        if not domain and not company:
-            raise ProviderError('hunter_identity_missing')
-        params = {'domain': domain} if domain else {'company': company}
-        path = 'email-finder' if person else 'domain-search'
-        if person:
-            if not selected.get('name'):
-                raise ProviderError('hunter_identity_missing')
-            params.update(full_name=selected['name'], max_duration=20)
-        else:
-            params['limit'] = 10
+    def _get(self, path, params):
         started = monotonic()
         record_http('request', {'provider': 'hunter', 'method': 'GET',
             'url': str(self.client.base_url.join(path)), 'body': safe_body(params, (self.key,))})
@@ -82,6 +67,41 @@ class Hunter:
                 unknown_charge=response.status_code >= 500)
         if not isinstance(body, dict) or 'data' not in body or body.get('errors'):
             raise ProviderError('hunter_invalid_response', unknown_charge=True)
+        return response, body
+
+    def resolve_company(self, selected):
+        _, body = self._get('domain-finder', {'company': selected['name'], 'perfect_match': 'true', 'limit': 2})
+        data = body.get('data') or []
+        if not isinstance(data, list):
+            raise ProviderError('hunter_invalid_response')
+        rows = [row for row in data if isinstance(row, dict) and domain_name(row.get('domain'))]
+        return {'source': 'hunter', 'records': rows, 'reported_milli_cny': None, 'credits_used': 0, 'credits_unit': 'credit'}
+
+    def contacts(self, selected):
+        return self._contacts(selected)
+
+    def targeted_contacts(self, selected):
+        return self._contacts(selected, selected['hunter_filters'])
+
+    def _contacts(self, selected, filters=None):
+        namespace = selected.get('namespace', 'customs_company')
+        identifier = str(selected.get('record_id') or selected.get('company_id') or '')
+        person = namespace == 'directory_person'
+        domain = domain_name(selected.get('website'))
+        company = selected.get('company_name') or (None if person else selected.get('name'))
+        if not domain and not company:
+            raise ProviderError('hunter_identity_missing')
+        params = {'domain': domain} if domain else {'company': company}
+        path = 'email-finder' if person else 'domain-search'
+        if person:
+            if not selected.get('name'):
+                raise ProviderError('hunter_identity_missing')
+            params.update(full_name=selected['name'], max_duration=20)
+        else:
+            params['limit'] = 10
+            if filters:
+                params.update(filters)
+        response, body = self._get(path, params)
         data = body['data'] or {}
         if not isinstance(data, dict):
             raise ProviderError('hunter_invalid_response', unknown_charge=True)
@@ -114,6 +134,8 @@ class Hunter:
                 'verification_status': status, 'verified_at': verification.get('date'),
                 'name': ' '.join(str(email.get(k) or '') for k in ('first_name', 'last_name')).strip(),
                 'position': email.get('position'), 'confidence': email.get('confidence', email.get('score')),
+                'department': email.get('department'), 'seniority': email.get('seniority'),
+                'decision_maker': email.get('decision_maker'),
                 'provenance': email.get('provenance'), 'sources': sources, 'source_url': source_url,
                 'company_match': 'domain_match_requires_review' if domain else 'provider_name_match_requires_review'})
         try:

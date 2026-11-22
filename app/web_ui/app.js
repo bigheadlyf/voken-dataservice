@@ -22,6 +22,7 @@ const operations = {
   directory_companies: "统一企业库",
   directory_people: "人物与岗位",
   directory_contacts: "联系方式解锁",
+  targeted_contacts: "精准联系人检索",
   trade_search: "按产品查历史贸易",
 };
 const statuses = {
@@ -248,7 +249,7 @@ function providerEvidenceHTML(evidence, kind) {
   html += (evidence.records || [])
     .map((row) => {
       if (row.channel)
-        return `<article class="lead"><b>${escape({ emails: "邮箱", phones: "电话", websites: "网站", socials: "社媒" }[row.channel] || "联系信息")}</b><p>${escape(row.value)}</p>${row.verification_source === "hunter" ? `<p class="hint">来源：Hunter · ${escape(row.name || "企业联系入口")} ${escape(row.position || "")} · ${escape(row.verification_status || "未检测")}</p>` : ""}<p class="hint">${escape({ 0: "上游未检测", 1: "上游标记有效，投递前仍需核对", 2: "上游标记无效", 3: "上游状态不确定" }[row.validity] || "有效性未检测")}</p></article>`;
+        return `<article class="lead"><b>${escape({ emails: "邮箱", phones: "电话", websites: "网站", socials: "社媒" }[row.channel] || "联系信息")}</b><p>${escape(row.value)}</p>${row.verification_source === "hunter" ? `<p class="hint">来源：Hunter · ${escape(row.name || "企业联系入口")} ${escape(row.position || "")} · ${escape(row.verification_status || "未检测")} ${row.role_match ? escape(row.role_match === "keyword_or_department_match" ? "· 岗位关键词/部门命中，待核实" : "· 岗位待核实") : ""}</p>` : ""}<p class="hint">${escape({ 0: "上游未检测", 1: "上游标记有效，投递前仍需核对", 2: "上游标记无效", 3: "上游状态不确定" }[row.validity] || "有效性未检测")}</p></article>`;
       const trade = kind === "customs";
       const measures = trade ? `<p>数量：${escape(row.quantity ?? "未提供")} ${escape(row.quantity_unit || "单位未知")}<br>重量：${escape(row.weight ?? "未提供")} ${escape(row.weight_unit || "单位未知")}<br>金额：${escape(row.amount ?? "未提供")} ${escape(row.amount_unit || "币种未知")}</p><p class="hint">原产国：${escape(row.origin_country || "未知")} → 抵运国：${escape(row.arrival_country || "未知")}<br>HS：${escape((row.hs_codes || []).join("、") || "未提供")}<br>数量为原始明细，不代表单型号采购量；币种未知时不能推算价格。</p>` : "";
       return `<article class="lead"><b>${escape(row.name || row.buyer || "企业记录")}</b><p>${escape(row.product_description || row.scope || row.introduce || "")}</p><p>${escape(row.address || row.buyer_country || row.industry || "")}</p>${!trade && row.country_verification === "unknown" ? '<p class="hint">企业国家未由上游返回，查询国家不代表企业归属。</p>' : ""}${row.seller ? `<p>历史供应方：${escape(row.seller)}</p>` : ""}${row.trade_date_ms ? `<p class="hint">交易时间：${escape(date(row.trade_date_ms))}</p>` : ""}${measures}</article>`;
@@ -426,10 +427,12 @@ async function loadGlobal() {
   updateDiscoveryPrice();
 }
 function updateDiscoveryPrice() {
+  const targetedQuote = state.pointQuotes?.targeted_contacts;
+  if (targetedQuote && $("#targeted-contact-price")) $("#targeted-contact-price").textContent = `本次最多预占 ${targetedQuote.total_points} 点：平台 ${targetedQuote.platform_points} 点，数据预算 ${targetedQuote.data_points} 点。最多两次 Hunter 岗位查询，未使用部分释放；积分单独记录，不自动发信。`;
   const tier = $('#discovery-form [name="tier"]').value;
   const quote =
     state.pointQuotes?.[
-      tier !== "basic" ? "prospecting_enhanced" : "prospecting"
+      tier === "ai_enhanced" ? "prospecting_ai_enhanced" : tier !== "basic" ? "prospecting_enhanced" : "prospecting"
     ];
   if (quote)
     $("#discovery-price").textContent =
@@ -539,7 +542,7 @@ async function selectProspect(id) {
       .join(
         "",
       )}</select></label><label>商务联系方式<input name="contact" value="${escape(row.contact)}" maxlength="500"></label><label>标签（逗号分隔）<input name="tags" value="${escape(row.tags.join(", "))}"></label><label>下次跟进时间<input name="next_followup_at" type="datetime-local" value="${localFollowup}"></label><label class="check"><input type="checkbox" name="do_not_contact" ${row.do_not_contact ? "checked" : ""}>拒绝联系 / 停止跟进</label><button type="submit" class="primary">保存跟进设置</button></form><div class="actions"><button data-research="${row.id}">公域查证与找邮箱 · ${state.prices.report} 点</button></div><hr><h3>写好第一封开发信</h3><form id="draft-form"><label>语言<select name="language">${["English", "Chinese", "Spanish", "German", "French", "Portuguese"].map((v) => `<option>${v}</option>`).join("")}</select></label><label>这封信的目标<textarea name="objective" rows="2" maxlength="1000" required>简洁介绍产品，询问对方是否有相关需求。</textarea></label><button type="submit" ${row.do_not_contact ? "disabled" : ""}>生成待审阅草稿 · ${state.prices.outreach_draft} 点</button></form><hr><h3>记录一次推进</h3><form id="activity-form"><label>记录类型<select name="kind"><option value="note">备注</option><option value="email_sent">已通过自有邮箱发送</option><option value="reply">收到回复</option><option value="call">通话</option><option value="meeting">会议</option><option value="feedback">线索质量反馈</option><option value="opt_out">收到拒绝联系请求</option></select></label><label>内容<textarea name="content" rows="3" required maxlength="4000"></textarea></label><button type="submit">保存记录</button></form><hr><h3>最近跟进记录</h3>${activities.map(activityHTML).join("") || '<p class="hint">暂无跟进记录</p>'}`;
-  $("#customer-detail").insertAdjacentHTML("beforeend", '<hr><button data-directory-prospect="true">查企业与岗位联系人</button><div id="saved-directory-contacts"></div>');
+  $("#customer-detail").insertAdjacentHTML("beforeend", '<hr><button data-directory-prospect="true">查企业与岗位联系人</button><button data-targeted-prospect="selected">精准联系人检索 · AI增强</button><div id="saved-directory-contacts"></div>');
   if (typeof renderSavedDirectoryContacts === "function") await renderSavedDirectoryContacts(id);
   if (typeof renderWorkbenchContactDetails === "function") await renderWorkbenchContactDetails(id);
 }
@@ -774,7 +777,7 @@ document.addEventListener("click", (event) => {
       );
     });
 });
-async function createDiscoveryTask(configuration, tier, enhanced) {
+async function createDiscoveryTask(configuration, tier, enhanced, contactTarget = "procurement") {
   if (state.discoverySubmitting) throw new Error("任务正在提交，请稍候，避免重复创建。");
   state.discoverySubmitting = true;
   try {
@@ -796,7 +799,8 @@ async function createDiscoveryTask(configuration, tier, enhanced) {
       sessionStorage.setItem(agentSlot, JSON.stringify(state.discoveryAgent));
     }
     const payload = { acquisition_tier: tier === "enhanced_contacts" ? "enhanced" : tier, confirm_paid: enhanced,
-      ...(tier === "enhanced_contacts" ? {enhancement_goal:"contacts"} : {}) };
+      ...(tier === "enhanced_contacts" ? {enhancement_goal:"contacts"} : {}),
+      ...(tier === "ai_enhanced" ? {contact_target:contactTarget} : {}) };
     const slot = "voken-run-" + state.session.workspace_id;
     const key = pendingSubmission(slot, {
       agent: state.discoveryAgent.id,
@@ -863,7 +867,7 @@ document.addEventListener("submit", (event) => {
       const enhanced = data.tier !== "basic";
       if (enhanced && !$("#discovery-form [name=paid]").checked)
         throw new Error(errors.paid_confirmation_required);
-      await createDiscoveryTask(configuration, data.tier, enhanced);
+      await createDiscoveryTask(configuration, data.tier, enhanced, data.contact_target);
     } else if (form.id === "company-form") {
       const fields = Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, v.trim() || null]),

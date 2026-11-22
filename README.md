@@ -141,3 +141,6 @@ app.state.agent_tools['opportunity_summary'] = AgentTool(
 `HUNTER_DAILY_CALL_LIMIT` 默认全平台每日 20 次，设为 0 停用。`HUNTER_CONTACT_ESTIMATE_MILLI_CNY` 默认 170（约 ¥0.17），仅用于经营成本估算与增强档预算控制。实际 `credits_used`/`credits_unit` 保留在 `hunter_fallback` 中，不换算成已确认人民币账单，也不额外向用户收取估算数据点数。跨境魔方原费用、配额和结果保持独立。供应商日志包含两家实际请求与返回，不记录密钥。
 
 Hunter 失败、额度耗尽时保留跨境魔方结果并显示警告。上游网络/服务错误可以尝试 Hunter；任务预算耗尽、跨境魔方日限额及待核对的中断调用不会通过备用源绕过。每个补查步骤沿用任务级调用记录，重新执行不会重复请求；相同企业/人物独立查询沿用原有 24 小时任务复用规则。修改配置与代码后需重启服务；历史缓存任务不会自动重跑。
+
+
+AI增强档与已有企业的独立精准联系人检索已接入，接口、预算和岗位匹配边界见 [API集成指南](./docs/API集成指南.md#ai增强档与独立精准联系人检索2026-11-22)。AI增强档默认 ¥7 数据预算；独立接口为 `POST /directory/targeted-contacts`。

@@ -11,6 +11,8 @@ def points_for_milli(value):
 def quote(settings,operation,payload=None):
     payload=payload or {}
     budget=DATA_BUDGETS.get(operation,0)
+    if operation=='targeted_contacts':budget=2*settings.hunter_contact_estimate_milli_cny
+    if operation=='prospecting' and payload.get('acquisition_tier')=='ai_enhanced':budget=7000
     if operation=='prospecting' and payload.get('acquisition_tier')=='enhanced':budget=6000
     base=settings.point_cost(operation)
     data=points_for_milli(budget)

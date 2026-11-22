@@ -405,3 +405,42 @@ CRM 导出保留证据类型、期限与来源链接；`.eml` 是待审阅邮件
 运行增强任务可传 `{"acquisition_tier":"enhanced","enhancement_goal":"contacts","confirm_paid":true}`，优先补前两家公域候选的企业联系方式；默认 enhancement_goal 为 trade。完整边界、路由和真实验收结果见[统一获客接入与优化验收](./跨境魔方统一获客接入与优化验收-20261121.md)。
 
 发现客户增加 `lead_review` 审计摘要及每条线索的 `assessment`（角色、产品、国家判断及原句）；最多复核10个候选，使用 analysis 模型场景，不取代来源校验。英国 `find_tender` / `contracts_finder` 已升级原生 OCDS：`POST /sources/searches` 可带 `procurement_stage: "tender" | "award" | "all"`，默认 tender，国家仅支持 GB 或不填。每次上游一页最多100条后本地匹配关键词，返回 `scanned_count`、`matched_in_page`、`search_scope`、`date_filter`；`total_reported=null`，不是全库关键词总数。新来源、真实接口对照和边界见[本次验收](./联系人接口对照与LLM-OSINT优化验收-20261121.md)。
+
+
+## AI增强档与独立精准联系人检索（2026-11-22）
+
+三档保持独立：`basic` 为基础公域发现；`enhanced` 为高级档（原逻辑、每任务 ¥6 数据预算）；`ai_enhanced` 在高级档上额外使用 Hunter 定向查询前两家企业的目标岗位邮箱，每任务 ¥7 数据预算。已存在总机或通用邮箱也会继续查询目标岗位；旧档位的空结果补查逻辑保持兼容。均受供应商日调用上限、任务取消和幂等账本约束。需配置 `HUNTER_API_KEY`；未配置时 AI增强档与独立接口返回 `hunter_not_configured`。
+
+### 新任务使用 AI增强档
+
+向 `POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/runs` 传入：
+
+```json
+{"acquisition_tier":"ai_enhanced","confirm_paid":true,"contact_target":"procurement","contact_titles":[]}
+```
+
+`contact_target` 支持 `procurement`（采购/寻源/供应链，默认）、`leadership`、`sales`、`engineering`。可用 `contact_titles` 指定最多6个具体职位，每个1–80字符、不含逗号；自定义职位使用直接职位查询。岗位检索不是模型生成邮箱，实际调用 Hunter API。
+
+### 为已有企业独立增强
+
+`POST /api/v1/workspaces/{workspace_id}/directory/targeted-contacts`，沿用 Bearer 鉴权与必填 `Idempotency-Key`。可传本空间已有客户：
+
+```json
+{"prospect_id":"替换为本空间32位客户ID","contact_target":"procurement","confirm_company_match":true,"confirm_paid":true}
+```
+
+或者传 `company_name` 和 `website`，不与 `prospect_id` 混用：
+
+```json
+{"company_name":"Buyer Ltd","website":"https://buyer.example","contact_target":"procurement","contact_titles":["Purchasing Manager","Sourcing Director"],"confirm_company_match":true,"confirm_paid":true}
+```
+
+用户需核对企业与官网；已有客户缺官网时返回 `targeted_contacts_website_required`。独立检索不依赖跨境魔方。返回异步 Job，`operation=targeted_contacts`，在 `result.directory` 读取候选与岗位依据。相同工作空间相同请求24小时复用；相同幂等键更改条件返回409。结果可通过既有 `/directory/saved-contacts` 或 `/crm/workbench/candidates` 人工采用，候选保存不会覆盖主邮箱。
+
+默认先按部门筛选，未取得匹配邮箱再按具体岗位词查询，最多两次、每次最多10个邮箱、不自动翻页；自定义职位最多一次。AI增强档企业缺官网时可先通过免费的 Hunter Domain Finder 做唯一同名解析；歧义或没有唯一同名官网则跳过并提示，不把第三方目录当官网。
+
+每条候选保留 `position`、`department`、`role_match`、`role_match_basis`、来源及供应商验证状态。`keyword_or_department_match` 仅表示职位关键词/部门命中，不证明当前任职或购买权限；不匹配保留为 `needs_review`，`matched_contact_count` 单独计数，无目标岗位时 `coverage=no_target_matches`。`accept_all` 不算验证有效。积分回传缺失时 `credits_used=null`，另列已知积分和待确认标记。
+
+独立接口默认最多预占34数据点（2×¥0.17经营费用估算）及平台点数，使用 `/points/quotes` 中的 `targeted_contacts` 获取报价；估算参数可配置。AI增强档报价键为 `prospecting_ai_enhanced`。供应商积分不伪装成已确认人民币账单，未回传金额的估算不会直接作为用户实际扣费。界面在发现客户的数据方案中提供 AI增强档，在企业与联系人页提供独立表单，客户详情也有精准检索入口。
+
+本次代码与前端产物需要重启服务后生效；无需新增数据库迁移，未自动部署生产。

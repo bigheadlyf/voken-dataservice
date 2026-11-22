@@ -49,7 +49,7 @@ test("top-level navigation keeps customer tools in their section on desktop and 
     exact: true,
   });
   await expect(primary.getByRole("button")).toHaveText([
-    "我的概况",
+    "我的工作台",
     "客户与商机",
     "订单与收款",
     "保障与资金",
@@ -69,12 +69,12 @@ test("top-level navigation keeps customer tools in their section on desktop and 
     primary.getByRole("button", { name: "订单与收款", exact: true }),
   ).toHaveAttribute("aria-current", "true");
   await primary.getByRole("button", { name: "保障与资金", exact: true }).click();
-  await expect(page.getByText("保障与资金功能暂未开放", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "马来西亚出海服务试点" })).toBeVisible();
   await primary.getByRole("button", { name: "AI能力", exact: true }).click();
   await expect(page.getByRole("button", { name: /AI 发现客户/ })).toBeVisible();
   await page.goto("/app");
   await expect(page).toHaveURL(/#my-overview$/);
-  await expect(page.locator("#page-title")).toHaveText("我的概况");
+  await expect(page.locator("#page-title")).toHaveText("我的工作台");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "打开导航", exact: true }).click();
   const drawer = page.getByRole("dialog", {
@@ -91,6 +91,59 @@ test("top-level navigation keeps customer tools in their section on desktop and 
     .click();
   await expect(page).toHaveURL(/#discover$/);
   await expect(page.locator("#page-title")).toHaveText("发现客户");
+});
+
+test("personal workbench connects live CRM and employees to the shared transaction demo", async ({ page }) => {
+  await page.goto("/app");
+  const data = page.getByRole("region", { name: "业务数据" });
+  const employees = page.getByRole("region", { name: "数字员工" });
+  await expect(data.getByRole("button", { name: /已保存客户.*65/ })).toBeVisible();
+  await expect(data.getByRole("button", { name: /累计回款.*32,400/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "常用功能" }).getByRole("button", { name: "客户工作台" })).toBeVisible();
+  await employees.getByRole("button", { name: /验收用马来西亚拓客员/ }).click();
+  await expect(page.getByRole("dialog")).toContainText("包装耗材");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.screenshot({ path: resolve(evidence, "personal-workbench-desktop.png"), fullPage: true });
+
+  const mutations: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/v1/") && request.method() !== "GET") mutations.push(request.url());
+  });
+  await employees.getByRole("button", { name: /保险分析师/ }).click();
+  await page.getByRole("button", { name: "预览保障需求清单" }).click();
+  await expect(page.getByRole("dialog")).toContainText("装箱单");
+  await page.getByRole("button", { name: "关闭预览" }).click();
+  await page.getByRole("tab", { name: "应收融资对接" }).click();
+  await expect(page.getByText("已备 2 / 5 项", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "预览机构对接摘要" }).click();
+  await expect(page.getByRole("dialog")).toContainText("应收账款确权凭证");
+  await page.getByRole("button", { name: "关闭预览" }).click();
+  await page.getByRole("button", { name: "查看订单收款" }).click();
+  await page.getByRole("button", { name: "预览收款提醒" }).click();
+  await expect(page.getByRole("dialog")).toContainText("USD 33,600");
+  await page.getByRole("button", { name: "关闭预览" }).click();
+  await page.getByRole("button", { name: "核对回款流水" }).click();
+  await expect(page.getByRole("dialog")).toContainText("DEMO-PSP-8616");
+  await page.getByRole("button", { name: "确认演示对账" }).click();
+  await expect(page.getByText("应收余额为零，已结清", { exact: true })).toBeVisible();
+  await page.screenshot({ path: resolve(evidence, "orders-payments-desktop.png"), fullPage: true });
+  await page.getByRole("button", { name: "查看订单保障" }).click();
+  await page.getByRole("tab", { name: "应收融资对接" }).click();
+  await expect(page.getByText("这笔订单已结清，无待融资应收", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /门店标准化设备/ }).click();
+  await expect(page.getByText("已备 4 / 5 项", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "查看订单收款" }).click();
+  await expect(page.getByRole("button", { name: /门店标准化设备/ })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("navigation", { name: "一级导航" }).getByRole("button", { name: "我的工作台" }).click();
+  await expect(data.getByRole("button", { name: /累计回款.*66,000.*1 笔样例订单待回款/ })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: resolve(evidence, "personal-workbench-mobile.png"), fullPage: true });
+  await employees.getByRole("button", { name: /收款跟进员/ }).click();
+  await expect(page.locator("#page-title")).toHaveText("订单与收款");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(mutations).toEqual([]);
 });
 
 test("applied filters, saved view, removable chips and remembered density", async ({
@@ -375,6 +428,11 @@ test("mobile navigation, drawer and logout keep data isolated between accounts",
   await page.getByRole("button", { name: "进入工作台", exact: true }).click();
   await expect(page.locator("#auth")).toBeHidden();
   await page.getByRole("button", { name: "打开导航", exact: true }).click();
+  await page.getByRole("button", { name: "我的工作台", exact: true }).click();
+  await expect(page.getByText("当前工作空间尚未创建拓客数字员工。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /验收用马来西亚拓客员/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "打开导航", exact: true }).click();
+  await page.getByRole("button", { name: "客户与商机", exact: true }).click();
   await page
     .getByRole("menuitem", { name: "team 客户工作台", exact: true })
     .click();

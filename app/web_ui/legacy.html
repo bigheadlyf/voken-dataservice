@@ -264,17 +264,15 @@
                 >数据方案<select name="tier">
                   <option value="basic">基础发现 · 公开搜索</option>
                   <option value="enhanced">
-                    增强发现 · 公开搜索 + 跨境魔方
+                    高级档 · 公开搜索 + 跨境魔方
                   </option>
-                  <option value="enhanced_contacts">增强发现 · 优先补前2家企业的联系方式</option>
+                  <option value="ai_enhanced">AI增强档 · 高级档 + 目标岗位联系人（¥7预算）</option><option value="enhanced_contacts">增强发现 · 优先补前2家企业的联系方式</option>
                 </select></label
-              ><label class="check"
+              ><label>AI增强目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label><label class="check"
                 ><input name="ted" type="checkbox" />同时查近 90 天 TED
                 官方招标（原生接口无单次数据费；仍须核对时效及投标资格）</label
               ><label class="check" id="paid-label" hidden
-                ><input name="paid" type="checkbox" />同意预占最多 600
-                数据点（对应 ¥6
-                数据预算），另加下方平台点数。按明确回传费用结算并释放差额，异常回传不向钱包追加扣点。</label
+                ><input name="paid" type="checkbox" />同意按下方当前档位报价预占平台点数与数据预算。按明确回传费用结算并释放差额，异常回传不向钱包追加扣点。</label
               ><div class="actions"><button id="discovery-preview" type="button">先看最多5家真实样本</button><button class="primary" type="submit">开始找客户 →</button></div>
               <p id="discovery-price" class="hint"></p>
             </form>
@@ -359,6 +357,8 @@
           </div>
         </section>
         <section id="directory" class="tab-panel" hidden>
+          <form id="targeted-contact-form" data-extension="directory" class="panel"><h3>精准联系人检索 · AI增强</h3><p class="hint">针对已有企业直接检索目标岗位。请核对企业名称和官网，不会因为已有总机或通用邮箱而跳过。最多两次岗位查询，不自动发送邮件。</p><input type="hidden" name="prospect_id"><label>企业名称<input name="company_name" required maxlength="240"></label><label>已核对的企业官网<input name="website" type="url" required maxlength="500" placeholder="https://buyer.com"></label><label>AI增强目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label><label>具体职位（选填，逗号分隔，最多6个）<input name="contact_titles" maxlength="480" placeholder="Purchasing Manager, Sourcing Director"></label><p class="notice" id="targeted-contact-price">按当前精准检索报价预占，未使用部分释放；Hunter 积分单独记录。</p><label class="check"><input type="checkbox" name="reviewed" required>我已核对企业与官网归属</label><label class="check"><input type="checkbox" name="paid" required>同意按所示报价预占平台点数与数据预算</label><button type="submit" class="primary">开始精准联系人检索</button></form>
+
           <details class="panel"><summary>按产品查询历史贸易记录</summary><form id="trade-form" data-extension="directory">
             <div class="form-row"><label>英文产品词<input name="product" maxlength="150" placeholder="food pan" /></label><label>HS 编码（可代替产品词）<input name="hs_code" pattern="[0-9]{6,10}" /></label></div>
             <div class="form-row"><label>买方国家（选填）<input name="buyer_country" pattern="[A-Z]{2}" placeholder="US" /></label><label>买方名称（选填）<input name="buyer" maxlength="200" /></label></div>

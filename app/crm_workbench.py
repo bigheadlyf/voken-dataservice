@@ -387,7 +387,7 @@ def save_candidate(body: CandidateInput, workspace: ws.WorkspaceAccess, sessions
         ws.lock_workspace(session, workspace)
         get_prospect(session, workspace, body.prospect_id)
         job = ws.get_job(session, workspace, body.job_id)
-        if job.operation != 'directory_contacts' or job.status != 'succeeded':
+        if job.operation not in ('directory_contacts', 'targeted_contacts') or job.status != 'succeeded':
             raise HTTPException(409, 'directory_job_not_ready')
         data = (job.result or {}).get('directory', {})
         if not data.get('records') or not data.get('subject'):

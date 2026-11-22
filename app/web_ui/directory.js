@@ -8,6 +8,7 @@ function resetDirectoryView() {
   directoryTarget = null;
   directoryPreferredTitles = "";
   $("#directory-form").reset();
+  $("#targeted-contact-form")?.reset();
   $("#directory-selected").hidden = true;
   $("#directory-selected").textContent = "";
 }
@@ -38,8 +39,9 @@ async function directorySubmit(path, payload, slot) {
 function directoryResultHTML(data) {
   const records = data.records || [];
   const quota = data.quota_usage || {};
-  let html = `<div class="notice">本页 ${records.length} 条${data.has_more ? " · 还有下一页" : ""}<br>来源：${data.source === "upkuajing+hunter" ? "跨境魔方 + Hunter" : "跨境魔方"} · ${escape(quota.billing_mode || "未回传计费模式")} · 请求扣量 ${quota.request_units || 0} · 记录扣量 ${quota.record_units || 0} · 解锁扣量 ${quota.unlock_units || 0}<br>现金费用为零时，套餐配额仍可能被消耗。</div>`;
+  let html = data.source === "hunter" ? `<div class="notice">来源：Hunter · ${records.length} 个邮箱候选 · 目标岗位命中 ${data.matched_contact_count || 0} 条。岗位与有效性仍须分别核对。</div>` : `<div class="notice">本页 ${records.length} 条${data.has_more ? " · 还有下一页" : ""}<br>来源：${data.source === "hunter" ? "Hunter 精准岗位检索" : data.source === "upkuajing+hunter" ? "跨境魔方 + Hunter" : "跨境魔方"} · ${escape(quota.billing_mode || "未回传计费模式")} · 请求扣量 ${quota.request_units || 0} · 记录扣量 ${quota.record_units || 0} · 解锁扣量 ${quota.unlock_units || 0}<br>现金费用为零时，套餐配额仍可能被消耗。</div>`;
   if (data.hunter_fallback) html += `<p class="hint">已补查 Hunter：${escape(({matches:"取得邮箱，仍须核对归属",no_matches:"未找到邮箱",failed:"本次补查未完成"})[data.hunter_fallback.status] || "状态未知")}；积分消耗 ${escape(data.hunter_fallback.credits_used ?? "未回传")}，不等于人民币账单。</p>`;
+  if (data.search_target) html += `<p class="notice">目标岗位：${escape(({procurement:"采购 / 寻源 / 供应链",leadership:"企业负责人",sales:"销售 / 业务开发",engineering:"技术 / 工程"})[data.search_target] || data.search_target)} · Hunter 积分 ${escape(data.credits_used ?? "未回传")}；岗位匹配不等于已确认采购权限。</p>`;
   if (data.kind === "contacts") {
     html += `<h3>${escape(data.subject?.name || "所选主体")}</h3><p>${escape((data.subject?.titles || []).join(" / "))}</p><p class="hint">有效性为上游标记，取得时间不等于验证时间；任职、企业归属与当前采购需求仍须核实。</p>`;
     html += providerEvidenceHTML(data,"buyer");
@@ -61,7 +63,8 @@ function leadEnrichmentHTML(lead) {
   const status = {ambiguous_company:"存在同名主体，未自动解锁，请单独核对",no_exact_company:"未找到唯一同名同国家主体，可单独查询核对",contacts_empty:"已查询，但上游未返回具体联系方式",contacts_returned:"已补充企业联系入口，保存前请核对主体"}[lead.enrichment_status];
   const assessment = lead.assessment;
   const reviewed = assessment ? `<details><summary>查看 AI 证据复核（仍须核实）</summary><p>${escape(assessment.explanation || "")}</p>${[["role","客户角色"],["product","产品"],["country","市场"]].map(([axis,label]) => `<p>${label}：${escape(({fit:"符合",not_fit:"不符合",unknown:"依据不足"})[assessment[axis+"_fit"]] || "依据不足")}</p>${assessment[axis+"_quote"] ? `<blockquote>${escape(assessment[axis+"_quote"])}</blockquote>` : ""}`).join("")}</details>` : "";
-  return reviewed + (status ? `<p class="hint">${escape(status)}</p>` : "") + (lead.business_contacts?.records?.length ? `<details><summary>查看已补充的 ${lead.business_contacts.records.length} 项联系信息</summary>${providerEvidenceHTML(lead.business_contacts,"buyer")}</details>` : "");
+  const targeted = lead.targeted_contact_status ? `<p class="hint">AI增强目标岗位：${escape(lead.targeted_contacts?.search_target || "采购")} · ${escape(({matches:"已找到岗位候选，任职与权限仍须核实",no_target_matches:"未找到目标岗位"})[lead.targeted_contact_status] || lead.targeted_contact_status)}</p>` : "";
+  return reviewed + targeted + (status ? `<p class="hint">${escape(status)}</p>` : "") + (lead.business_contacts?.records?.length ? `<details><summary>查看已补充的 ${lead.business_contacts.records.length} 项联系信息</summary>${providerEvidenceHTML(lead.business_contacts,"buyer")}</details>` : "");
 }
 
 async function openDirectory(name, country="", selection=null, target=null, preferredTitles="") {
@@ -117,7 +120,12 @@ document.addEventListener("submit", event=> {
   event.preventDefault();
   void runAction($("button[type=submit]",form),async()=> {
     const data = formData(form);
-    if (form.id === "directory-form") {
+    if (form.id === "targeted-contact-form") {
+      if (!form.elements.paid.checked || !form.elements.reviewed.checked) throw new Error(errors.paid_confirmation_required);
+      const payload = {company_name:data.company_name.trim(),website:data.website.trim(),contact_target:data.contact_target,
+        contact_titles:data.contact_titles.split(/[,，]/).map(x=>x.trim()).filter(Boolean),confirm_paid:true,confirm_company_match:true};
+      await directorySubmit("/directory/targeted-contacts",payload,"targeted");
+    } else if (form.id === "directory-form") {
       if (!form.elements.paid.checked) throw new Error(errors.paid_confirmation_required);
       const payload = {kind:data.kind,require_email:form.elements.require_email.checked,confirm_paid:true};
       for (const key of ["company_name","website","country","product"]) if (data[key]) payload[key] = data[key].trim();
@@ -151,6 +159,15 @@ document.addEventListener("click",event=> {
   if (button.id === "discovery-preview") void runAction(button,async()=> {
     const configuration = directoryConfiguration();
     if (configuration) await directorySubmit("/discovery/preview",configuration,"preview");
+  });
+  if (dataset.targetedProspect) void runAction(button,async()=> {
+    const id = dataset.targetedProspect === "selected" ? state.selectedProspect?.id : dataset.targetedProspect;
+    const row = await api(root()+"/crm/prospects/"+encodeURIComponent(id));
+    directoryTarget = row.id;
+    await switchTab("directory");
+    const form = $("#targeted-contact-form"); form.reset();
+    form.elements.company_name.value = row.name; form.elements.website.value = row.website || "";
+    form.scrollIntoView({block:"center"}); form.elements.website.focus();
   });
   if (dataset.directoryProspect !== undefined) void runAction(button,async()=> {
     const row = state.selectedProspect;

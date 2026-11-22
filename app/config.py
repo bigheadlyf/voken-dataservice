@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 
 BUYER_OPERATIONS = {'search': 'buyer_search', 'profile': 'buyer_profile', 'contacts': 'buyer_contacts'}
-BILLABLE_OPERATIONS = frozenset({'trade_search', 'directory_companies', 'directory_people', 'directory_contacts', 'prospecting', 'public_search', 'report', 'outreach_draft', 'source_lookup', 'customs_verification', *BUYER_OPERATIONS.values()})
+BILLABLE_OPERATIONS = frozenset({'targeted_contacts', 'trade_search', 'directory_companies', 'directory_people', 'directory_contacts', 'prospecting', 'public_search', 'report', 'outreach_draft', 'source_lookup', 'customs_verification', *BUYER_OPERATIONS.values()})
 LLMScenario = Literal['chat', 'judgment', 'analysis']
 
 

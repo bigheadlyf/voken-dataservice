@@ -71,6 +71,7 @@ import {
   type Snapshot,
 } from "./bridge";
 import { WorkbenchActionModal, type WorkbenchAction } from "./WorkbenchAction";
+import { BusinessPages } from "./BusinessPages";
 import {
   FILTER_DEFAULTS,
   filterChips,
@@ -110,7 +111,7 @@ const verification: Record<string, string> = {
   unverified: "尚未独立验证",
 };
 const titles: Record<string, string> = {
-  "my-overview": "我的概况",
+  "my-overview": "我的工作台",
   "orders-payments": "订单与收款",
   "protection-funding": "保障与资金",
   "ai-capabilities": "AI能力",
@@ -127,7 +128,7 @@ const titles: Record<string, string> = {
   costs: "用量与费用",
 };
 const descriptions: Record<string, string> = {
-  "my-overview": "查看业务进展与工作空间用量。",
+  "my-overview": "查看业务进展、数字员工和常用功能。",
   overview: "从发现到跟进，让每一条客户线索都有下一步。",
   workbench: "筛选企业、核对联系人，集中推进值得跟进的商机。",
   discover: "从产品与市场出发，找到下一批合适的潜在客户。",
@@ -613,6 +614,8 @@ function CustomerDrawer({
         </div>
       }
       extra={
+        <Space>
+        {row && <Button data-targeted-prospect={row.id} onClick={onClose}>精准联系人检索</Button>}
         <Button
           icon={<ReloadOutlined />}
           aria-label="刷新客户详情"
@@ -624,6 +627,7 @@ function CustomerDrawer({
         >
           刷新
         </Button>
+        </Space>
       }
     >
       {error ? (
@@ -1566,6 +1570,7 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
     directory_companies: "企业查询",
     directory_people: "人物与岗位",
     directory_contacts: "联系方式解锁",
+    targeted_contacts: "精准联系人检索",
     buyer_search: "采购商匹配",
     buyer_profile: "企业资料",
     buyer_contacts: "联系方式",
@@ -1680,7 +1685,7 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
   );
 }
 const workspaceSections = [
-  { key: "my-overview", label: "我的概况", icon: <DashboardOutlined /> },
+  { key: "my-overview", label: titles["my-overview"], icon: <DashboardOutlined /> },
   {
     key: "customers-opportunities",
     label: "客户与商机",
@@ -1695,55 +1700,8 @@ const workspaceSections = [
   { key: "ai-capabilities", label: "AI能力", icon: <AppstoreOutlined /> },
 ];
 
-function SectionHome({
-  tab,
-  data,
-  bridge,
-}: {
-  tab: string;
-  data: Snapshot;
-  bridge: Bridge;
-}) {
-  if (tab === "my-overview") {
-    return (
-      <div className="native-page">
-        <Metrics
-          items={[
-            {
-              label: "已保存客户",
-              value: data.summary?.total,
-              note: "当前工作空间",
-              icon: <TeamOutlined />,
-            },
-            {
-              label: "到期待跟进",
-              value: data.summary?.due_followups,
-              note: "到期且允许联系的客户",
-              icon: <ClockCircleOutlined />,
-            },
-          ]}
-        />
-        <Card title="常用入口" className="section-home-card">
-          <Space wrap>
-            <Button
-              type="primary"
-              onClick={() => ignore(bridge.navigate("workbench"))}
-            >
-              进入客户工作台
-            </Button>
-            <Button
-              icon={<WalletOutlined />}
-              onClick={() => ignore(bridge.navigate("costs"))}
-            >
-              {data.balance} · 用量与费用
-            </Button>
-          </Space>
-        </Card>
-      </div>
-    );
-  }
-  if (tab === "ai-capabilities") {
-    return (
+function AICapabilities({ bridge }: { bridge: Bridge }) {
+  return (
       <Card title="可用能力" className="section-home-card">
         <div className="workflow-list">
           <button
@@ -1771,19 +1729,6 @@ function SectionHome({
           </button>
         </div>
       </Card>
-    );
-  }
-  return (
-    <Card className="section-home-card">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={
-          tab === "orders-payments"
-            ? "订单与收款功能暂未开放"
-            : "保障与资金功能暂未开放"
-        }
-      />
-    </Card>
   );
 }
 
@@ -2035,9 +1980,8 @@ function Workspace() {
               </div>
               {bridge && data?.session && (
                 <div key={data.session?.workspace_id || "signed-out"}>
-                  {showSectionHome && (
-                    <SectionHome tab={tab} data={data} bridge={bridge} />
-                  )}
+                  <BusinessPages data={data} bridge={bridge} />
+                  {tab === "ai-capabilities" && <AICapabilities bridge={bridge} />}
                   {tab === "overview" && (
                     <Overview data={data} bridge={bridge} />
                   )}{" "}

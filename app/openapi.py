@@ -37,7 +37,7 @@ partial 要显示已有结果、warnings 和证据来源；成功也可能没有
 
 ## 付费授权与边界
 采购商增强、海关核验必须由用户明确确认后在当前请求传 confirm_paid=true，且提供 Idempotency-Key。
-拓客 runs 可选择 acquisition_tier=basic/enhanced，省略为 basic；增强档需 confirm_paid=true，按公开单价控制每任务6元预算。
+拓客 runs 可选择 acquisition_tier=basic/enhanced/ai_enhanced，省略为 basic；增强档需 confirm_paid=true，按公开单价控制每任务6元预算。
 员工 messages 的 acquisition_tier 控制本轮 start_task 的真实档位；付费工具也受本轮6元额度限制。
 历史确认或模型生成的字段不能替代当前请求授权。默认上游调用全平台按 UTC 日限 5 次，设为 0 会禁用新付费查询。
 DeepSeek 和跨境魔方密钥只在服务端配置，不由客户端传入。
@@ -117,7 +117,7 @@ class LeadResponse(DocumentedResponse):
 
 
 class ProviderEvidence(DocumentedResponse):
-    source: Literal['upkuajing']
+    source: Literal['upkuajing', 'hunter', 'upkuajing+hunter']
     records: list[dict[str, Any]] = Field(description=(
         'buyer_search 项含 company_id/name/buyer_country，buyer_country 未知时为 null；'
         'requested_buyer_country 仅是查询条件，country_verification 标注 provider_reported/unknown；可有 scope/address；profile 为企业资料；'
@@ -132,7 +132,7 @@ class ProviderEvidence(DocumentedResponse):
 
 class JobResult(DocumentedResponse):
     lead_review: dict[str, Any] | None = Field(default=None, description='最多10条候选的LLM复核状态、换源数及有原句支持的不匹配排除记录；失败时保留原证据校验结果。')
-    acquisition_tier: Literal['basic', 'enhanced'] | None = None
+    acquisition_tier: Literal['basic', 'enhanced', 'ai_enhanced'] | None = None
     paid_usage: dict[str, Any] | None = Field(default=None, description='跨境魔方预算、已占预算、回传费用、待确认标志及调用数，金额单位千分之一元。')
     retrieved_at: str | None = None
     warnings: list[str] = Field(default_factory=list)
@@ -159,10 +159,10 @@ class JobResponse(DocumentedResponse):
     id: str = Field(description='保存此 job_id，通过 GET jobs/{job_id} 轮询；报告任务的 report_id 即此 ID。')
     agent_id: str | None
     config_version: int | None
-    acquisition_tier: Literal['basic', 'enhanced'] | None = None
+    acquisition_tier: Literal['basic', 'enhanced', 'ai_enhanced'] | None = None
     operation: Literal['prospecting', 'public_search', 'report', 'buyer_search', 'buyer_profile',
                        'buyer_contacts', 'customs_verification', 'outreach_draft', 'source_lookup',
-                       'directory_companies', 'directory_people', 'directory_contacts', 'trade_search']
+                       'directory_companies', 'directory_people', 'directory_contacts', 'targeted_contacts', 'trade_search']
     status: Literal['queued', 'running', 'cancelling', 'succeeded', 'partial', 'failed', 'cancelled']
     point_cost: int = Field(description='提交时预占总点数，包含平台部分及按报价选定的数据预算部分。')
     points_charged: int = Field(description='实际结算点数；上游费用另见结果 reported_milli_cny。')

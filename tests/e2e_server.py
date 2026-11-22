@@ -38,6 +38,10 @@ def build_app(directory):
         headers = {'Authorization': 'Bearer ' + login['access_token']}
         root = '/api/v1/workspaces/' + login['workspace_id']
         if phone.endswith('991'):
+            client.post(root+'/agents', headers=headers, json={
+                'name':'验收用马来西亚拓客员', 'market':'马来西亚', 'product':'包装耗材',
+                'instructions':'寻找采购包装耗材的马来西亚连锁商户。',
+            }).raise_for_status()
             client.put(root+'/company/profile', headers=headers, json={'expected_version':0,
                 'name':'UI Acceptance Lighting', 'website':'https://example.test', 'products':'LED lighting',
                 'contact_details':'Acceptance test only', 'target_markets':'US'}).raise_for_status()

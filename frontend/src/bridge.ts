@@ -1,11 +1,18 @@
 // The remaining business forms share the original, tenant-aware API and submission logic.
 // React owns the shell and data views; the compatibility DOM is never reconciled by React.
 export type RecordData = Record<string, any>;
+export interface ProspectingAgent {
+  id: string;
+  status: string;
+  config: { name: string; instructions: string; market?: string | null; product?: string | null };
+}
 export interface Snapshot {
   session: RecordData | null;
   tab: string;
   balance: string;
   summary: RecordData | null;
+  dashboardAgents: ProspectingAgent[] | null;
+  dashboardAgentsError: boolean;
   jobs: RecordData[];
   workbench: RecordData;
   workbenchError: string;

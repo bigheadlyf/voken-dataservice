@@ -138,14 +138,14 @@ function discoveryPlanHTML(plan) {
     ...(plan.hs_code ? [["HS 编码", plan.hs_code]] : []),
     ...(plan.public_sources?.length ? [["补充来源", "近 90 天 TED 官方招标"]] : []),
   ];
-  return `<form id="discovery-chat-create" data-extension="discovery" class="chat-plan"><p class="eyebrow">任务方案 · 等待你确认</p><h3>准备好后，再开始找客户</h3><dl>${fields.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join("")}</dl><label>数据方案<select name="tier" id="discovery-chat-tier"><option value="basic">基础发现 · 公开搜索</option><option value="enhanced">增强发现 · 公开搜索 + 跨境魔方</option></select></label><p id="discovery-chat-price" class="notice"></p><label class="check" id="discovery-chat-paid" hidden><input name="paid" type="checkbox">同意预占最多 600 数据点（对应 ¥6 数据预算），另加平台点数，按费用结算并释放差额。</label><label class="check"><input name="reviewed" type="checkbox" required>我已核对任务条件与预占点数。</label><div class="actions"><button type="submit" class="primary">确认并创建任务 →</button><button type="button" id="discovery-plan-to-form">转到表单编辑</button></div><p class="hint">还想调整？展开下方条件卡，点选修改后一次更新。</p></form><details class="discovery-edit"><summary>修改产品、市场、客户类型或数量</summary>${discoveryBriefHTML(plan)}</details>`;
+  return `<form id="discovery-chat-create" data-extension="discovery" class="chat-plan"><p class="eyebrow">任务方案 · 等待你确认</p><h3>准备好后，再开始找客户</h3><dl>${fields.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join("")}</dl><label>数据方案<select name="tier" id="discovery-chat-tier"><option value="basic">基础发现 · 公开搜索</option><option value="enhanced">高级档 · 公开搜索 + 跨境魔方</option><option value="ai_enhanced">AI增强档 · 高级档 + 目标岗位联系人</option></select></label><label>AI增强目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label><p id="discovery-chat-price" class="notice"></p><label class="check" id="discovery-chat-paid" hidden><input name="paid" type="checkbox">同意按当前档位报价预占平台点数与数据预算，按费用结算并释放差额。</label><label class="check"><input name="reviewed" type="checkbox" required>我已核对任务条件与预占点数。</label><div class="actions"><button type="submit" class="primary">确认并创建任务 →</button><button type="button" id="discovery-plan-to-form">转到表单编辑</button></div><p class="hint">还想调整？展开下方条件卡，点选修改后一次更新。</p></form><details class="discovery-edit"><summary>修改产品、市场、客户类型或数量</summary>${discoveryBriefHTML(plan)}</details>`;
 }
 
 function updateDiscoveryChatQuote() {
   const select = $("#discovery-chat-tier");
   if (!select) return;
-  const enhanced = select.value === "enhanced";
-  const quote = state.pointQuotes?.[enhanced ? "prospecting_enhanced" : "prospecting"];
+  const enhanced = select.value !== "basic";
+  const quote = state.pointQuotes?.[select.value === "ai_enhanced" ? "prospecting_ai_enhanced" : enhanced ? "prospecting_enhanced" : "prospecting"];
   $("#discovery-chat-paid").hidden = !enhanced;
   $("#discovery-chat-paid input").required = enhanced;
   $("#discovery-chat-paid input").checked = false;
@@ -265,8 +265,9 @@ document.addEventListener("click", (event) => {
     form.elements.reference_websites.value = (plan.reference_websites || []).join("\n");
     form.elements.ted.checked = (plan.public_sources || []).includes("ted");
     form.elements.tier.value = $("#discovery-chat-tier").value;
+    form.elements.contact_target.value = $("#discovery-chat-create [name=contact_target]").value;
     form.elements.paid.checked = false;
-    $("#paid-label").hidden = form.elements.tier.value !== "enhanced";
+    $("#paid-label").hidden = form.elements.tier.value === "basic";
     updateDiscoveryPrice();
     setDiscoveryMode("form");
     form.elements.name.focus();
@@ -308,9 +309,9 @@ document.addEventListener("submit", (event) => {
       await sendDiscoveryMessage(form.elements.content.value.trim());
     if (form.id === "discovery-chat-create") {
       if (!discoveryChat.plan || discoveryChat.pending || !form.elements.reviewed.checked) return;
-      const enhanced = form.elements.tier.value === "enhanced";
+      const enhanced = form.elements.tier.value !== "basic";
       if (enhanced && !form.elements.paid.checked) throw new Error(errors.paid_confirmation_required);
-      await createDiscoveryTask(discoveryChat.plan, form.elements.tier.value, enhanced);
+      await createDiscoveryTask(discoveryChat.plan, form.elements.tier.value, enhanced, form.elements.contact_target.value);
       resetDiscoveryChat();
     }
   });

@@ -101,9 +101,17 @@ class PublicSearch(BaseModel):
 class ProspectingRunRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    acquisition_tier: Literal['basic', 'enhanced'] = 'basic'
+    acquisition_tier: Literal['basic', 'enhanced', 'ai_enhanced'] = 'basic'
     confirm_paid: bool = False
     enhancement_goal: Literal['trade', 'contacts'] = 'trade'
+    contact_target: Literal['procurement', 'leadership', 'sales', 'engineering'] = 'procurement'
+    contact_titles: list[str] = Field(default_factory=list, max_length=6)
+
+    @model_validator(mode='after')
+    def contact_criteria(self):
+        from app.targeted_contacts import TargetCriteria
+        TargetCriteria(contact_target=self.contact_target, contact_titles=self.contact_titles)
+        return self
 
 
 class ReportRequest(BaseModel):
@@ -245,7 +253,7 @@ def enqueue(session, workspace, settings, operation, payload, key, fingerprint, 
 
 
 def has_deliverable(operation: str, result: dict | None) -> bool:
-    if operation in ('directory_companies', 'directory_people', 'directory_contacts'):
+    if operation in ('directory_companies', 'directory_people', 'directory_contacts', 'targeted_contacts'):
         return bool((result or {}).get('directory', {}).get('records'))
     if operation == 'source_lookup':
         return bool((result or {}).get('source_lookup', {}).get('records'))
@@ -331,7 +339,8 @@ def point_quotes(request: Request,workspace: WorkspaceAccess):
     """完整点数预占报价，包含付费数据预算；增强档最多 600 数据点，已明确回传费用结算后释放差额。"""
     settings=request.app.state.settings
     return {**{operation:point_quote(settings,operation) for operation in sorted(BILLABLE_OPERATIONS)},
-        'prospecting_enhanced':point_quote(settings,'prospecting',{'acquisition_tier':'enhanced'})}
+        'prospecting_enhanced':point_quote(settings,'prospecting',{'acquisition_tier':'enhanced'}),
+        'prospecting_ai_enhanced':point_quote(settings,'prospecting',{'acquisition_tier':'ai_enhanced'})}
 
 
 @router.post('/agents', status_code=201)
@@ -388,10 +397,12 @@ def update_agent(agent_id: str, body: AgentConfigPatch, workspace: WorkspaceAcce
 def start_agent(agent_id: str, request: Request, workspace: WorkspaceAccess, sessions: Sessions,
                 idempotency_key: IdempotencyKey = None, body: ProspectingRunRequest = ProspectingRunRequest()):
     identity = {'agent_id': agent_id}
-    if body.acquisition_tier == 'enhanced':
+    if body.acquisition_tier in ('enhanced', 'ai_enhanced'):
         if not body.confirm_paid:
             raise HTTPException(409, 'paid_confirmation_required')
-        identity['acquisition_tier'] = 'enhanced'
+        identity['acquisition_tier'] = body.acquisition_tier
+        if body.acquisition_tier == 'ai_enhanced':
+            identity.update(contact_target=body.contact_target, contact_titles=body.contact_titles)
         if body.enhancement_goal == 'contacts':
             identity['enhancement_goal'] = 'contacts'
     fingerprint = request_fingerprint('prospecting', identity)
@@ -400,8 +411,10 @@ def start_agent(agent_id: str, request: Request, workspace: WorkspaceAccess, ses
         replay = replay_job(session, workspace, idempotency_key, fingerprint)
         if replay is not None:
             return job_view(replay)
-        if body.acquisition_tier == 'enhanced' and not customs_available(request):
+        if body.acquisition_tier in ('enhanced', 'ai_enhanced') and not customs_available(request):
             raise HTTPException(503, 'customs_provider_unavailable')
+        if body.acquisition_tier == 'ai_enhanced' and (not request.app.state.settings.hunter_api_key or request.app.state.settings.hunter_daily_call_limit <= 0):
+            raise HTTPException(503, 'hunter_not_configured')
         agent = get_agent(session, workspace, agent_id)
         active = session.scalar(select(Job.id).where(
             Job.workspace_id == workspace, Job.agent_id == agent.id, Job.status.in_(ACTIVE_STATES),
@@ -410,9 +423,11 @@ def start_agent(agent_id: str, request: Request, workspace: WorkspaceAccess, ses
             raise HTTPException(status_code=409, detail='agent_run_in_progress')
         agent.status = 'enabled'
         payload = {**current_config(session, agent), 'acquisition_tier': body.acquisition_tier}
-        if body.acquisition_tier == 'enhanced':
+        if body.acquisition_tier in ('enhanced', 'ai_enhanced'):
             payload['enhancement_goal'] = body.enhancement_goal
-            payload['paid_budget_milli_cny'] = 6000
+            payload['paid_budget_milli_cny'] = 7000 if body.acquisition_tier == 'ai_enhanced' else 6000
+            if body.acquisition_tier == 'ai_enhanced':
+                payload.update(contact_target=body.contact_target, contact_titles=body.contact_titles)
             payload['trade_date_end'] = utcnow().date().isoformat()
             payload['trade_date_start'] = (utcnow().date() - timedelta(days=365)).isoformat()
         return job_view(enqueue(session, workspace, request.app.state.settings, 'prospecting',

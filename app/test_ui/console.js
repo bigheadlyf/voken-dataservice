@@ -282,7 +282,7 @@ async function refreshAgents() {
     const actions = element("div", null, "buttons");
     const tierLabel = element("label", "本次启动档位");
     const tier = document.createElement("select");
-    tier.append(new Option("基础档 · 公域获客", "basic"), new Option("增强档 · 确认付费，预算 ¥6", "enhanced"));
+    tier.append(new Option("基础档 · 公域获客", "basic"), new Option("高级档 · 确认付费，预算 ¥6", "enhanced"), new Option("AI增强档 · 目标岗位联系人，预算 ¥7", "ai_enhanced"));
     tierLabel.append(tier);
     entry.append(tierLabel);
     const path = `/agents/${agent.id}`;
@@ -294,7 +294,7 @@ async function refreshAgents() {
       }),
       button("启动", async () => {
         const job = await api(workspace(`${path}/runs`), {method: "POST", key: newIdempotencyKey(),
-          body: {acquisition_tier: tier.value, confirm_paid: tier.value === "enhanced"}});
+          body: {acquisition_tier: tier.value, confirm_paid: tier.value !== "basic"}});
         state.selected = job.id;
         announce("任务已提交。");
         await Promise.all([refreshAgents(), refreshJobs(), refreshPoints()]);
@@ -416,7 +416,7 @@ function renderJobs() {
 async function showJob(job) {
   const cached = job && state.reports.get(job.id);
   renderResult(cached || job);
-  if (job?.acquisition_tier === "enhanced" || ["buyer_search", "buyer_profile", "buyer_contacts", "customs_verification"].includes(job?.operation)) {
+  if (job?.acquisition_tier !== "basic" || ["buyer_search", "buyer_profile", "buyer_contacts", "customs_verification"].includes(job?.operation)) {
     const panel = element("section", null, "provider-logs");
     panel.append(element("h3", "跨境魔方接口日志"), element("p", "正在读取请求与返回…", "muted"));
     $("job-result").append(panel);
@@ -650,7 +650,7 @@ function renderResult(job) {
   const data = job.result || {};
   result.replaceChildren(element("h3", `${operationLabels[job.operation]} · ${jobLabels[job.status]}`),
     element("p", `预估 ${job.point_cost} 点 · 已扣 ${job.points_charged} 点`, "muted"));
-  if (job.operation === "prospecting") result.append(element("p", job.acquisition_tier === "enhanced" ? "增强档 · 跨境魔方与公域筛选" : "基础档 · 公域获客", "muted"));
+  if (job.operation === "prospecting") result.append(element("p", job.acquisition_tier !== "basic" ? "增强档 · 跨境魔方与公域筛选" : "基础档 · 公域获客", "muted"));
   if (data.paid_usage) {
     const usage = data.paid_usage;
     result.append(element("p", `跨境魔方预算 ¥${(usage.budget_milli_cny / 1000).toFixed(2)} · 已占预算 ¥${(usage.committed_milli_cny / 1000).toFixed(2)} · 已调用 ${usage.calls} 次${usage.has_unconfirmed_cost ? " · 部分费用待供应商确认" : ""}`, "muted"));
@@ -920,7 +920,7 @@ chatForm.addEventListener("submit", (event) => {
   const tier = chatAcquisitionTier();
   sendChat({method: "POST", path: workspace(`/agents/${chat.agent}/messages`), key: newIdempotencyKey(),
     body: {content, ...(chat.conversation ? {conversation_id: chat.conversation} : {}),
-      acquisition_tier: tier, confirm_paid: tier === "enhanced"}});
+      acquisition_tier: tier, confirm_paid: tier !== "basic"}});
 });
 
 let chatPolling = false;
