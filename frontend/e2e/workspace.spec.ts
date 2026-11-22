@@ -37,6 +37,62 @@ test.afterEach(async ({ page }) => {
   ).toEqual([]);
 });
 
+test("top-level navigation keeps customer tools in their section on desktop and mobile", async ({
+  page,
+}) => {
+  const primary = page.getByRole("navigation", {
+    name: "一级导航",
+    exact: true,
+  });
+  const customers = page.getByRole("menu", {
+    name: "客户与商机导航",
+    exact: true,
+  });
+  await expect(primary.getByRole("button")).toHaveText([
+    "我的概况",
+    "客户与商机",
+    "订单与收款",
+    "保障与资金",
+    "AI能力",
+  ]);
+  await expect(
+    primary.getByRole("button", { name: "客户与商机", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await expect(customers).toBeVisible();
+  await primary
+    .getByRole("button", { name: "订单与收款", exact: true })
+    .click();
+  await expect(page.locator("#page-title")).toHaveText("订单与收款");
+  await expect(customers).toHaveCount(0);
+  await page.reload();
+  await expect(
+    primary.getByRole("button", { name: "订单与收款", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await primary.getByRole("button", { name: "保障与资金", exact: true }).click();
+  await expect(page.getByText("保障与资金功能暂未开放", { exact: true })).toBeVisible();
+  await primary.getByRole("button", { name: "AI能力", exact: true }).click();
+  await expect(page.getByRole("button", { name: /AI 发现客户/ })).toBeVisible();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/#my-overview$/);
+  await expect(page.locator("#page-title")).toHaveText("我的概况");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "打开导航", exact: true }).click();
+  const drawer = page.getByRole("dialog", {
+    name: "工作空间导航",
+    exact: true,
+  });
+  await drawer.getByRole("button", { name: "客户与商机", exact: true }).click();
+  await expect(page).toHaveURL(/#workbench$/);
+  await expect(
+    drawer.getByRole("menu", { name: "客户与商机导航" }),
+  ).toBeVisible();
+  await drawer
+    .getByRole("menuitem", { name: "thunderbolt 发现客户", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#discover$/);
+  await expect(page.locator("#page-title")).toHaveText("发现客户");
+});
+
 test("applied filters, saved view, removable chips and remembered density", async ({
   page,
 }) => {

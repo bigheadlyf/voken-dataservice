@@ -412,7 +412,7 @@ async function enter() {
   $("#workspace").hidden = false;
   state.tab = "overview";
   await loadGlobal();
-  await switchTab(location.hash.slice(1) || "overview");
+  await switchTab(location.hash.slice(1) || (window.__VOKEN_REACT__ ? "my-overview" : "overview"));
 }
 async function loadGlobal() {
   const [balance, prices, quotes] = await Promise.all([
@@ -458,7 +458,7 @@ async function switchTab(tab) {
   await refreshTab();
 }
 async function refreshTab() {
-  if (state.tab === "overview") await loadOverview();
+  if (["overview", "my-overview"].includes(state.tab)) await loadOverview();
   if (state.tab === "customers") await loadCustomers();
   if (state.tab === "workbench" && typeof loadWorkbench === "function") await loadWorkbench();
   if (state.tab === "company") await loadCompany();

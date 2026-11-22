@@ -36,9 +36,11 @@ import type { ColumnsType } from "antd/es/table";
 import zhCN from "antd/locale/zh_CN";
 import {
   ApartmentOutlined,
+  AppstoreOutlined,
   ArrowRightOutlined,
   BankOutlined,
   CheckCircleOutlined,
+  CreditCardOutlined,
   ClockCircleOutlined,
   ContactsOutlined,
   DashboardOutlined,
@@ -52,6 +54,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  SafetyCertificateOutlined,
   TeamOutlined,
   ThunderboltOutlined,
   UnorderedListOutlined,
@@ -60,6 +63,7 @@ import {
 import pages from "./legacy-pages.html?raw";
 import account from "./legacy-account.html?raw";
 import {
+  assetBase,
   initialize,
   UI_EVENT,
   type Bridge,
@@ -106,6 +110,10 @@ const verification: Record<string, string> = {
   unverified: "尚未独立验证",
 };
 const titles: Record<string, string> = {
+  "my-overview": "我的概况",
+  "orders-payments": "订单与收款",
+  "protection-funding": "保障与资金",
+  "ai-capabilities": "AI能力",
   overview: "业务概况",
   discover: "发现客户",
   workbench: "客户工作台",
@@ -119,6 +127,7 @@ const titles: Record<string, string> = {
   costs: "用量与费用",
 };
 const descriptions: Record<string, string> = {
+  "my-overview": "查看业务进展与工作空间用量。",
   overview: "从发现到跟进，让每一条客户线索都有下一步。",
   workbench: "筛选企业、核对联系人，集中推进值得跟进的商机。",
   discover: "从产品与市场出发，找到下一批合适的潜在客户。",
@@ -170,8 +179,14 @@ function Legacy({
 }
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <a className="voken-brand" href="#overview" aria-label="微元 Voken 首页">
-      <span className="brand-symbol">v</span>
+    <a className="voken-brand" href="#my-overview" aria-label="微元 Voken 首页">
+      <img
+        className="brand-symbol"
+        src={`${assetBase()}favicon.svg`}
+        alt=""
+        width={40}
+        height={40}
+      />
       {!compact && (
         <span>
           微元<span className="brand-en">Voken</span>
@@ -192,43 +207,20 @@ function Auth({ ready }: { ready: boolean }) {
       <div className="auth-intro">
         <Brand />
         <div className="auth-intro-copy">
-          <Tag color="blue" icon={<GlobalOutlined />}>
-            为小团队，打开大市场
-          </Tag>
+          <p className="auth-kicker">微元 Voken 工作台</p>
           <h1>
-            每一次增长，
+            用<span className="brand-highlight"> AI </span>发现客户，
             <br />
-            始于对的客户。
+            推进每一次<span className="brand-accent">商机</span>。
           </h1>
-          <p>
-            发现有依据的线索，找到合适的联系人。
-            <br />让 AI 处理信息，把时间留给对话。
+          <p className="auth-lead">
+            核对企业和联系信息、审阅开发信，并跟进客户进展。
           </p>
-          <div className="auth-benefits">
-            {[
-              [<SearchOutlined />, "发现客户", "产品与市场驱动"],
-              [<CheckCircleOutlined />, "核对来源", "证据与判断分明"],
-              [<MailOutlined />, "推进对话", "审阅后再触达"],
-            ].map(([icon, title, note], i) => (
-              <div key={i}>
-                <span>{icon}</span>
-                <b>{title}</b>
-                <small>{note}</small>
-              </div>
-            ))}
-          </div>
         </div>
-        <Text type="secondary">
-          公开信息优先 · 数据按需增强 · 每一步有据可查
-        </Text>
       </div>
       <div className="auth-form-wrap">
         <div className="auth-form-card">
-          <span className="overline">YOUR GROWTH WORKSPACE</span>
-          <Title level={2}>欢迎回到微元</Title>
-          <Paragraph type="secondary">
-            登录你的海外业务工作台，继续推进商机。
-          </Paragraph>
+          <Title level={2}>登录微元工作台</Title>
           <form id="login-form" className="login-form" method="post">
             <label htmlFor="login-phone">手机号</label>
             <Input
@@ -263,9 +255,6 @@ function Auth({ ready }: { ready: boolean }) {
           </form>
           <Legacy html={account} />
         </div>
-        <Text type="secondary" className="auth-footer">
-          微元 Voken · 你的海外业务助手
-        </Text>
       </div>
     </section>
   );
@@ -336,44 +325,22 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
     <div className="native-page">
       <div className="overview-hero">
         <div>
-          <Tag icon={<ThunderboltOutlined />}>AI 驱动的客户开发</Tag>
           <h2>
-            把下一次增长，
-            <br />
-            变成今天的下一步。
+            发现客户，<span className="brand-highlight">推进商机</span>
           </h2>
-          <p>从产品和市场出发，建立有来源、可跟进的客户清单。</p>
+          <p>按目标市场和产品找客户，核对来源后加入客户档案。</p>
           <Space wrap>
             <Button
-              size="large"
+              type="primary"
               icon={<PlusOutlined />}
               onClick={() => ignore(bridge.navigate("discover"))}
             >
               创建找客任务
             </Button>
-            <Button
-              size="large"
-              ghost
-              onClick={() => ignore(bridge.navigate("workbench"))}
-            >
+            <Button onClick={() => ignore(bridge.navigate("workbench"))}>
               进入客户工作台
             </Button>
           </Space>
-        </div>
-        <div className="hero-orbit" aria-hidden="true">
-          <div className="orbit-ring" />
-          <div className="orbit-core">
-            <GlobalOutlined />
-          </div>
-          <div className="orbit-label label-one">
-            <CheckCircleOutlined /> 有据可查
-          </div>
-          <div className="orbit-label label-two">
-            <TeamOutlined /> 找到对的人
-          </div>
-          <div className="orbit-label label-three">
-            <MailOutlined /> 连接新商机
-          </div>
         </div>
       </div>
       <Metrics
@@ -406,10 +373,7 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
       />
       <Row gutter={[20, 20]}>
         <Col xs={24} lg={15}>
-          <Card
-            title="今天值得推进的事"
-            extra={<Tag color="blue">工作空间</Tag>}
-          >
+          <Card title="今天值得推进的事">
             <div className="next-action">
               <span className="action-icon">
                 <ClockCircleOutlined />
@@ -1715,6 +1679,114 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
     </div>
   );
 }
+const workspaceSections = [
+  { key: "my-overview", label: "我的概况", icon: <DashboardOutlined /> },
+  {
+    key: "customers-opportunities",
+    label: "客户与商机",
+    icon: <TeamOutlined />,
+  },
+  { key: "orders-payments", label: "订单与收款", icon: <CreditCardOutlined /> },
+  {
+    key: "protection-funding",
+    label: "保障与资金",
+    icon: <SafetyCertificateOutlined />,
+  },
+  { key: "ai-capabilities", label: "AI能力", icon: <AppstoreOutlined /> },
+];
+
+function SectionHome({
+  tab,
+  data,
+  bridge,
+}: {
+  tab: string;
+  data: Snapshot;
+  bridge: Bridge;
+}) {
+  if (tab === "my-overview") {
+    return (
+      <div className="native-page">
+        <Metrics
+          items={[
+            {
+              label: "已保存客户",
+              value: data.summary?.total,
+              note: "当前工作空间",
+              icon: <TeamOutlined />,
+            },
+            {
+              label: "到期待跟进",
+              value: data.summary?.due_followups,
+              note: "到期且允许联系的客户",
+              icon: <ClockCircleOutlined />,
+            },
+          ]}
+        />
+        <Card title="常用入口" className="section-home-card">
+          <Space wrap>
+            <Button
+              type="primary"
+              onClick={() => ignore(bridge.navigate("workbench"))}
+            >
+              进入客户工作台
+            </Button>
+            <Button
+              icon={<WalletOutlined />}
+              onClick={() => ignore(bridge.navigate("costs"))}
+            >
+              {data.balance} · 用量与费用
+            </Button>
+          </Space>
+        </Card>
+      </div>
+    );
+  }
+  if (tab === "ai-capabilities") {
+    return (
+      <Card title="可用能力" className="section-home-card">
+        <div className="workflow-list">
+          <button
+            type="button"
+            onClick={() => ignore(bridge.navigate("discover"))}
+          >
+            <span className="workflow-icon">
+              <ThunderboltOutlined />
+            </span>
+            <span>
+              <b>AI 发现客户</b>
+              <small>根据产品和目标市场建立找客任务</small>
+            </span>
+            <ArrowRightOutlined />
+          </button>
+          <button type="button" onClick={() => ignore(bridge.navigate("mail"))}>
+            <span className="workflow-icon">
+              <MailOutlined />
+            </span>
+            <span>
+              <b>AI 开发信</b>
+              <small>查看和审阅开发信草稿</small>
+            </span>
+            <ArrowRightOutlined />
+          </button>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card className="section-home-card">
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          tab === "orders-payments"
+            ? "订单与收款功能暂未开放"
+            : "保障与资金功能暂未开放"
+        }
+      />
+    </Card>
+  );
+}
+
 function Workspace() {
   const { message } = AntApp.useApp();
   const [bridge, setBridge] = useState<Bridge | null>(null),
@@ -1748,7 +1820,57 @@ function Workspace() {
       window.removeEventListener("voken:message", notify);
     };
   }, [message]);
-  const tab = data?.tab || "overview";
+  const tab = data?.tab || "my-overview";
+  const section =
+    workspaceSections.find(
+      ({ key }) => key === tab || (tab === "costs" && key === "my-overview"),
+    ) ?? workspaceSections[1];
+  const showCustomerMenu = section.key === "customers-opportunities";
+  const showSectionHome = [
+    "my-overview",
+    "orders-payments",
+    "protection-funding",
+    "ai-capabilities",
+  ].includes(tab);
+  const description =
+    descriptions[tab] ||
+    (tab === "job-view"
+      ? "核对任务结果与来源，准备下一步业务行动。"
+      : undefined);
+  const navigate = (key: string, closeDrawer = true) => {
+    if (bridge && tab !== key) ignore(bridge.navigate(key));
+    if (closeDrawer) setNavOpen(false);
+  };
+  const signOut = () => {
+    document.getElementById("logout")?.click();
+    setNavOpen(false);
+  };
+  const primaryNavigation = (
+    <nav className="workspace-sections" aria-label="一级导航">
+      {workspaceSections.map(({ key, label, icon }) => (
+        <Button
+          key={key}
+          type="text"
+          icon={
+            <span aria-hidden="true" className="workspace-section-icon">
+              {icon}
+            </span>
+          }
+          aria-current={key === section.key ? "true" : undefined}
+          onClick={() => {
+            if (key === "customers-opportunities") {
+              if (!showCustomerMenu) navigate("workbench", !mobile);
+              else if (!mobile) setCollapsed(false);
+            } else {
+              navigate(key);
+            }
+          }}
+        >
+          {label}
+        </Button>
+      ))}
+    </nav>
+  );
   const menu = [
     { key: "overview", icon: <DashboardOutlined />, label: "业务概况" },
     {
@@ -1776,50 +1898,34 @@ function Workspace() {
       ],
     },
   ];
-  const navigation = (
+  const customerNavigation = (
     <>
-      <div className="sidebar-brand">
-        <Brand compact={!mobile && collapsed} />
-      </div>
-      <div className="workspace-label">业务工作空间</div>
+      <div className="workspace-label">客户与商机</div>
       <Menu
+        aria-label="客户与商机导航"
         theme="light"
         mode="inline"
         selectedKeys={[tab === "job-view" ? "jobs" : tab]}
         items={menu}
-        onClick={({ key }) => {
-          if (bridge) ignore(bridge.navigate(key));
-          setNavOpen(false);
-        }}
+        onClick={({ key }) => navigate(key)}
       />
-      <div className="sidebar-bottom">
-        <button
-          className="points-entry"
-          onClick={() => {
-            if (bridge) ignore(bridge.navigate("costs"));
-            setNavOpen(false);
-          }}
-        >
-          <WalletOutlined />
-          <span>
-            <b>{data?.balance || "— 点数"}</b>
-            <small>用量与费用</small>
-          </span>
-          <ArrowRightOutlined />
-        </button>
-        <Button
-          aria-label="退出登录"
-          type="text"
-          icon={<LogoutOutlined />}
-          onClick={() => {
-            document.getElementById("logout")?.click();
-            setNavOpen(false);
-          }}
-        >
-          {!collapsed || mobile ? "退出登录" : null}
-        </Button>
-      </div>
     </>
+  );
+  const pointsNavigation = (
+    <div className="sidebar-bottom">
+      <button
+        className="points-entry"
+        aria-label={`${data?.balance || "— 点数"}，用量与费用`}
+        onClick={() => navigate("costs")}
+      >
+        <WalletOutlined />
+        <span>
+          <b>{data?.balance || "— 点数"}</b>
+          <small>用量与费用</small>
+        </span>
+        <ArrowRightOutlined />
+      </button>
+    </div>
   );
   return (
     <>
@@ -1834,42 +1940,69 @@ function Workspace() {
           />
         </div>
       )}
-      <div id="workspace" className="react-workspace" hidden>
+      <div
+        id="workspace"
+        className={`react-workspace${showCustomerMenu ? " has-customer-menu" : ""}`}
+        hidden
+      >
         <Layout>
+          <aside className="primary-sidebar">
+            <div className="primary-brand">
+              <Brand compact />
+            </div>
+            {primaryNavigation}
+            <Button
+              className="primary-logout"
+              aria-label="退出登录"
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={signOut}
+            />
+          </aside>
           <Layout.Sider
             className="voken-sidebar"
-            width={232}
-            collapsedWidth={80}
+            width={216}
+            collapsedWidth={68}
             collapsed={collapsed}
             breakpoint="lg"
             onBreakpoint={setMobile}
             trigger={null}
           >
-            {!mobile && navigation}
+            {showCustomerMenu && !mobile && (
+              <>
+                {customerNavigation}
+                {pointsNavigation}
+              </>
+            )}
           </Layout.Sider>
           <Layout className={`main-layout ${collapsed ? "is-collapsed" : ""}`}>
             <header className="workspace-topbar">
               <Space>
-                <Button
-                  type="text"
-                  aria-label={
-                    mobile ? "打开导航" : collapsed ? "展开导航" : "收起导航"
-                  }
-                  icon={
-                    collapsed || mobile ? (
-                      <MenuUnfoldOutlined />
-                    ) : (
-                      <MenuFoldOutlined />
-                    )
-                  }
-                  onClick={() =>
-                    mobile ? setNavOpen(true) : setCollapsed((v) => !v)
-                  }
-                />
+                {(mobile || showCustomerMenu) && (
+                  <Button
+                    type="text"
+                    aria-label={
+                      mobile ? "打开导航" : collapsed ? "展开导航" : "收起导航"
+                    }
+                    icon={
+                      collapsed || mobile ? (
+                        <MenuUnfoldOutlined />
+                      ) : (
+                        <MenuFoldOutlined />
+                      )
+                    }
+                    onClick={() =>
+                      mobile ? setNavOpen(true) : setCollapsed((v) => !v)
+                    }
+                  />
+                )}
                 <Breadcrumb
                   items={[
                     { title: "工作空间" },
-                    { title: titles[tab] || "业务概况" },
+                    { title: section.label },
+                    ...(section.label === titles[tab]
+                      ? []
+                      : [{ title: titles[tab] }]),
                   ]}
                 />
               </Space>
@@ -1888,13 +2021,11 @@ function Workspace() {
                   <h1 id="page-title" tabIndex={-1}>
                     {titles[tab] || "业务概况"}
                   </h1>
-                  <Text type="secondary">
-                    {descriptions[tab] ||
-                      "核对任务结果与来源，准备下一步业务行动。"}
-                  </Text>
+                  {description && <Text type="secondary">{description}</Text>}
                 </div>
                 <Button
                   id="refresh"
+                  hidden={showSectionHome && tab !== "my-overview"}
                   aria-label="刷新当前页面数据"
                   icon={<ReloadOutlined spin={data?.loading} />}
                   disabled={!bridge || data?.loading}
@@ -1902,8 +2033,11 @@ function Workspace() {
                   刷新数据
                 </Button>
               </div>
-              {bridge && data && (
+              {bridge && data?.session && (
                 <div key={data.session?.workspace_id || "signed-out"}>
+                  {showSectionHome && (
+                    <SectionHome tab={tab} data={data} bridge={bridge} />
+                  )}
                   {tab === "overview" && (
                     <Overview data={data} bridge={bridge} />
                   )}{" "}
@@ -1930,12 +2064,23 @@ function Workspace() {
       <Drawer
         title="工作空间导航"
         placement="left"
-        open={navOpen}
+        open={navOpen && mobile && !!data?.session}
         onClose={() => setNavOpen(false)}
         className="mobile-navigation"
-        size={260}
+        size={300}
       >
-        {navigation}
+        {primaryNavigation}
+        {showCustomerMenu && customerNavigation}
+        {pointsNavigation}
+        <Button
+          className="mobile-logout"
+          aria-label="退出登录"
+          type="text"
+          icon={<LogoutOutlined />}
+          onClick={signOut}
+        >
+          退出登录
+        </Button>
       </Drawer>
     </>
   );
@@ -1949,19 +2094,24 @@ createRoot(document.getElementById("root")!).render(
     csp={nonce ? { nonce } : undefined}
     theme={{
       token: {
-        colorPrimary: "#2456ee",
-        colorText: "#22324d",
-        colorTextSecondary: "#64748b",
-        colorBgLayout: "#f5f7fb",
-        colorBorderSecondary: "#e9edf4",
-        borderRadius: 10,
-        fontFamily: 'Inter, "Segoe UI", "Microsoft YaHei", sans-serif',
+        colorPrimary: "#2457e7",
+        colorText: "#10224b",
+        colorTextSecondary: "#5a6884",
+        colorBgLayout: "#f7f9fd",
+        colorBorderSecondary: "#e9edf6",
+        borderRadius: 8,
+        fontFamily: 'Inter, "Microsoft YaHei", "PingFang SC", sans-serif',
         fontSize: 14,
         controlHeight: 38,
       },
       components: {
         Layout: { siderBg: "#ffffff", headerBg: "#ffffff" },
-        Menu: { itemHeight: 44, itemMarginBlock: 5, itemBorderRadius: 8 },
+        Menu: {
+          itemHeight: 44,
+          itemMarginBlock: 5,
+          itemBorderRadius: 8,
+          itemSelectedBg: "#eef3ff",
+        },
         Table: { headerBg: "#f8faff", cellPaddingBlock: 16 },
         Card: { paddingLG: 24 },
       },

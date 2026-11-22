@@ -1,7 +1,10 @@
 "use strict";
 // Explicit adapter for the React views. Legacy scripts stay usable by their original tests.
 (() => {
-  Object.assign(titles,{overview:"业务概况",discover:"发现客户",directory:"企业与联系人",sources:"商业情报",company:"企业资料"});
+  Object.assign(titles,{
+    "my-overview":"我的概况", "orders-payments":"订单与收款", "protection-funding":"保障与资金", "ai-capabilities":"AI能力",
+    overview:"业务概况",discover:"发现客户",directory:"企业与联系人",sources:"商业情报",company:"企业资料",
+  });
   let summary = null, loading = 0, workbenchError = "";
   const publish = () => window.dispatchEvent(new Event("voken:updated"));
   const originalApi = api;
