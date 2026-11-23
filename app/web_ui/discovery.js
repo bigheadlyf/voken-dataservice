@@ -270,6 +270,8 @@ document.addEventListener("click", (event) => {
     $("#paid-label").hidden = form.elements.tier.value === "basic";
     updateDiscoveryPrice();
     setDiscoveryMode("form");
+    const options = $("#discovery-form-options");
+    if (options) options.open = true;
     form.elements.name.focus();
   }
 });

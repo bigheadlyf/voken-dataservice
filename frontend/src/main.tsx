@@ -71,6 +71,8 @@ import {
   type Snapshot,
 } from "./bridge";
 import { WorkbenchActionModal, type WorkbenchAction } from "./WorkbenchAction";
+import { CustomerActionModal, type CustomerAction } from "./CustomerAction";
+import { CustomerContactSearch, type ContactSearch } from "./CustomerContactSearch";
 import { BusinessPages } from "./BusinessPages";
 import {
   FILTER_DEFAULTS,
@@ -118,7 +120,6 @@ const titles: Record<string, string> = {
   overview: "业务概况",
   discover: "发现客户",
   workbench: "客户工作台",
-  customers: "客户档案",
   jobs: "任务管理",
   "job-view": "任务详情",
   directory: "企业与联系人",
@@ -133,7 +134,6 @@ const descriptions: Record<string, string> = {
   workbench: "筛选企业、核对联系人，集中推进值得跟进的商机。",
   discover: "从产品与市场出发，找到下一批合适的潜在客户。",
   jobs: "查看执行进度、核对来源，管理每一次发现。",
-  customers: "保留客户证据与沟通记录，持续推进每一次对话。",
   directory: "查询企业与目标岗位，按需补充商务联系信息。",
   sources: "核对企业背景，发现公开采购与市场信号。",
   company: "让 AI 理解你的企业、产品与目标市场。",
@@ -562,72 +562,100 @@ function ContactCard({
 }
 function CustomerDrawer({
   id,
+  initialTab,
+  active,
   bridge,
   capabilities,
-  onClose,
+  prices,
+  pointQuotes,
 }: {
-  id: string | null;
+  id: string;
+  initialTab: string;
+  active: boolean;
   bridge: Bridge;
   capabilities: RecordData;
-  onClose: () => void;
+  prices: RecordData;
+  pointQuotes: RecordData;
 }) {
+  const { message } = AntApp.useApp();
   const [data, setData] = useState<RecordData | null>(null),
     [error, setError] = useState(""),
     [version, setVersion] = useState(0);
+  const [tab, setTab] = useState(initialTab);
+  const [action, setAction] = useState<CustomerAction | null>(null);
+  const [contactSearch, setContactSearch] = useState<ContactSearch | null>(null);
+  const [applyingSource, setApplyingSource] = useState(false);
   useEffect(() => {
+    if (!active) return;
     let cancelled = false;
     setData(null);
     setError("");
-    if (id)
-      void bridge
-        .detail(id)
-        .then((value) => {
-          if (!cancelled) setData(value);
-        })
-        .catch((e) => {
-          if (!cancelled) setError(e.message);
-        });
+    void bridge
+      .detail(id)
+      .then((value) => {
+        if (!cancelled) setData(value);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
     return () => {
       cancelled = true;
     };
-  }, [id, bridge, version]);
+  }, [id, bridge, version, active]);
   const row = data?.prospect;
+  const sourceRecord = row?.evidence?.source_record;
+  const sourceEmail = sourceRecord?.details?.published_procurement_email;
+  const reload = () => setVersion((v) => v + 1);
+  const refreshCustomer = () => {
+    reload();
+    ignore(bridge.refreshCustomers());
+  };
+  async function applySource() {
+    setApplyingSource(true);
+    try {
+      await bridge.applySourceContact(id, {
+        expected_version: row.version,
+        job_id: row.evidence.origin_job_id,
+        value: sourceEmail,
+      });
+      refreshCustomer();
+      void message.success("已采用公告邮箱并保留来源");
+    } catch (failure) {
+      void message.error((failure as Error).message);
+    } finally {
+      setApplyingSource(false);
+    }
+  }
+  const editField = (value: React.ReactNode, label: string, field: CustomerAction, disabled = false) => (
+    <Space wrap>
+      {value}
+      <Button size="small" type="link" disabled={disabled} onClick={() => setAction(field)}>{label}</Button>
+    </Space>
+  );
   return (
+    <>
     <Drawer
       title={row?.name || "客户详情"}
-      open={!!id}
-      onClose={onClose}
+      open={active}
+      onClose={() => bridge.closeCustomer()}
       size={720}
       className="customer-drawer"
       footer={
         <div className="drawer-footer-actions">
-          <Button onClick={onClose}>关闭详情</Button>
-          <Button
-            type="primary"
-            disabled={!row}
-            onClick={() => {
-              if (id) ignore(bridge.edit(id).then(onClose));
-            }}
-          >
-            编辑档案与跟进
-          </Button>
+          <Button onClick={() => bridge.closeCustomer()}>关闭详情</Button>
+          <Button disabled={!row || row.do_not_contact} onClick={() => setAction("draft")}>写开发信</Button>
+          <Button type="primary" disabled={!row} onClick={() => setAction("activity")}>记录跟进</Button>
         </div>
       }
       extra={
-        <Space>
-        {row && <Button data-targeted-prospect={row.id} onClick={onClose}>精准联系人检索</Button>}
         <Button
           icon={<ReloadOutlined />}
           aria-label="刷新客户详情"
           disabled={!row}
-          type="primary"
-          onClick={() => {
-            setVersion((v) => v + 1);
-          }}
+          onClick={reload}
         >
           刷新
         </Button>
-        </Space>
       }
     >
       {error ? (
@@ -643,19 +671,13 @@ function CustomerDrawer({
         <Skeleton active paragraph={{ rows: 10 }} />
       ) : (
         <>
-          <Space wrap>
-            <Tag color={stageColors[row.stage]}>{stages[row.stage]}</Tag>
-            {row.do_not_contact && <Tag color="red">拒绝联系</Tag>}
-            {row.tags?.map((tag: string) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-          </Space>
           <Tabs
-            key={id}
+            activeKey={tab}
+            onChange={setTab}
             items={[
               {
                 key: "profile",
-                label: "企业与证据",
+                label: "客户资料",
                 children: (
                   <>
                     <Descriptions
@@ -663,6 +685,11 @@ function CustomerDrawer({
                       bordered
                       size="small"
                       items={[
+                        {
+                          key: "stage",
+                          label: "销售阶段",
+                          children: editField(<Tag color={stageColors[row.stage]}>{stages[row.stage]}</Tag>, "改阶段", "stage"),
+                        },
                         {
                           key: "location",
                           label: "国家 / 地区",
@@ -679,13 +706,29 @@ function CustomerDrawer({
                         },
                         {
                           key: "contact",
-                          label: "已记录联系信息",
-                          children: row.contact || "未提供",
+                          label: "商务联系方式",
+                          children: editField(row.contact || "未提供", "改联系方式", "contact"),
                         },
                         {
                           key: "followup",
                           label: "下次跟进",
-                          children: date(row.next_followup_at),
+                          children: editField(date(row.next_followup_at), "改跟进时间", "next_followup_at", row.do_not_contact),
+                        },
+                        {
+                          key: "tags",
+                          label: "标签",
+                          children: editField(
+                            row.tags.length ? row.tags.map((tag: string) => <Tag key={tag}>{tag}</Tag>) : "未添加",
+                            "改标签", "tags",
+                          ),
+                        },
+                        {
+                          key: "contact-status",
+                          label: "联系状态",
+                          children: editField(
+                            row.do_not_contact ? <Tag color="red">停止联系</Tag> : "可跟进",
+                            row.do_not_contact ? "恢复联系" : "停止联系", "do_not_contact",
+                          ),
                         },
                         {
                           key: "source",
@@ -710,6 +753,21 @@ function CustomerDrawer({
                           row.evidence?.source_note ||
                           "暂无补充依据，请核对原始来源。"}
                       </Paragraph>
+                      {row.evidence?.quote && <blockquote>{row.evidence.quote}</blockquote>}
+                      {sourceRecord && (
+                        <Paragraph>
+                          <Text strong>{sourceRecord.title}</Text><br />
+                          发布时间 {sourceRecord.details?.published_at || "未提供"}<br />
+                          截止日期 {sourceRecord.details?.deadline_dates?.join("、") || "待核实"}
+                          {sourceRecord.procurement_status === "expired" && <><br />公告已截止，仅作历史参考。</>}
+                          {sourceRecord.details?.attribution && <><br />{sourceRecord.details.attribution}</>}
+                        </Paragraph>
+                      )}
+                      {sourceEmail && (
+                        <Alert type="info" title={`公告公开邮箱 ${sourceEmail}`}
+                          description="采用前请核对采购主体、公告期限和联系用途。"
+                          action={<Button loading={applyingSource} onClick={() => void applySource()}>已核对，采用公告邮箱</Button>} />
+                      )}
                       <Alert
                         type="info"
                         title="企业匹配、岗位匹配与邮箱有效性分别判断；历史信息不代表当前采购需求。"
@@ -729,7 +787,7 @@ function CustomerDrawer({
                             <Button
                               type="link"
                               onClick={() =>
-                                ignore(bridge.edit(duplicate.id).then(onClose))
+                                ignore(bridge.openCustomer(duplicate.id))
                               }
                             >
                               打开档案核对
@@ -744,7 +802,16 @@ function CustomerDrawer({
               {
                 key: "contacts",
                 label: `联系人 (${data.contacts.length})`,
-                children: data.contacts.length ? (
+                children: (
+                  <>
+                  <Space wrap className="customer-contact-tools">
+                    <Button onClick={() => setContactSearch("company")}>查企业与岗位</Button>
+                    <Button onClick={() => setContactSearch("targeted")}>精准联系人检索</Button>
+                    <Button data-research={id}>
+                      公域查证与找邮箱{prices.report === undefined ? "" : ` · ${prices.report} 点`}
+                    </Button>
+                  </Space>
+                  {data.contacts.length ? (
                   <Space orientation="vertical" className="full-width">
                     {data.contacts.map((c: RecordData, i: number) => (
                       <ContactCard
@@ -752,15 +819,28 @@ function CustomerDrawer({
                         contact={c}
                         capabilities={capabilities}
                         bridge={bridge}
-                        onChange={() => {
-                          setVersion((v) => v + 1);
-                          ignore(bridge.refresh());
-                        }}
+                        onChange={refreshCustomer}
                       />
                     ))}
                   </Space>
                 ) : (
-                  <Empty description="暂无完整邮箱候选，可在客户档案中查询企业与岗位" />
+                  <Empty description="暂无联系人候选" />
+                  )}
+                  {data.savedContacts.map((contact: RecordData) => {
+                    const channels = contact.channels.filter((channel: RecordData) => channel.channel !== "emails");
+                    return channels.length > 0 && (
+                      <Card key={contact.id} size="small" title={contact.name} className="drawer-evidence">
+                        {channels.map((channel: RecordData, index: number) => (
+                          <Paragraph key={index} copyable>
+                            {({ phones: "电话", websites: "网站", socials: "社媒" } as Record<string, string>)[channel.channel] || "联系方式"} · {channel.value}
+                          </Paragraph>
+                        ))}
+                        <Text type="secondary">{contact.titles?.join(" / ")} · {date(contact.observed_at)}</Text>
+                        <Button type="link" data-job={contact.source_job_id}>来源任务</Button>
+                      </Card>
+                    );
+                  })}
+                  </>
                 ),
               },
               {
@@ -770,7 +850,7 @@ function CustomerDrawer({
                   !data.activities.length && !data.records.length ? (
                     <Empty
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="暂无跟进或验证记录，可在客户档案中记录下一步"
+                      description="暂无跟进或验证记录"
                     />
                   ) : (
                     <Timeline
@@ -778,7 +858,9 @@ function CustomerDrawer({
                         ...data.activities.map((a: RecordData) => ({
                           time: a.created_at,
                           title: historyLabels[a.kind] || "其他记录",
-                          content: a.content,
+                          content: ["draft_requested", "research_requested"].includes(a.kind) && /^[a-f0-9]{32}$/.test(a.content)
+                            ? <Button type="link" data-job={a.content}>查看任务</Button>
+                            : a.content,
                         })),
                         ...data.records.map((r: RecordData) => ({
                           time: r.created_at,
@@ -829,6 +911,21 @@ function CustomerDrawer({
         </>
       )}
     </Drawer>
+    {active && row && action && (
+      <CustomerActionModal key={action} action={action} row={row} bridge={bridge} stages={stages}
+        draftPrice={prices.outreach_draft} onClose={() => setAction(null)}
+        onSaved={(text) => {
+          setAction(null);
+          if (action === "activity") setTab("history");
+          refreshCustomer();
+          void message.success(text);
+        }} />
+    )}
+    {active && row && contactSearch && (
+      <CustomerContactSearch kind={contactSearch} row={row} bridge={bridge} pointQuotes={pointQuotes}
+        onClose={() => setContactSearch(null)} />
+    )}
+    </>
   );
 }
 const initialFilters: RecordData = FILTER_DEFAULTS;
@@ -840,7 +937,6 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
       wb.filters || initialFilters,
     ),
     [advanced, setAdvanced] = useState(false),
-    [drawer, setDrawer] = useState<string | null>(null),
     [viewModal, setViewModal] = useState(false),
     [viewName, setViewName] = useState(""),
     [saving, setSaving] = useState(false);
@@ -882,7 +978,7 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
             {String(value).slice(0, 1).toUpperCase()}
           </Avatar>
           <div>
-            <Button type="link" onClick={() => setDrawer(row.id)}>
+            <Button type="link" onClick={() => ignore(bridge.openCustomer(row.id))}>
               {value}
             </Button>
             <Text type="secondary">
@@ -947,10 +1043,10 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
       fixed: screens.md ? "right" : undefined,
       render: (_, r) => (
         <Space size={0}>
-          <Button type="link" onClick={() => setDrawer(r.id)}>
+          <Button type="link" onClick={() => ignore(bridge.openCustomer(r.id))}>
             详情
           </Button>
-          <Button type="link" data-wb-enrich={r.id}>
+          <Button type="link" onClick={() => ignore(bridge.openCustomer(r.id, "contacts"))}>
             查联系人
           </Button>
           <Button
@@ -971,7 +1067,7 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
       fixed: screens.md ? "left" : undefined,
       render: (_, r) => (
         <div>
-          <Button type="link" onClick={() => setDrawer(r.prospect_id)}>
+          <Button type="link" onClick={() => ignore(bridge.openCustomer(r.prospect_id, "contacts"))}>
             {r.name || "公共 / 岗位未知入口"}
           </Button>
           <br />
@@ -1034,7 +1130,7 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
       fixed: screens.md ? "right" : undefined,
       render: (_, r) => (
         <Space size={0}>
-          <Button type="link" onClick={() => setDrawer(r.prospect_id)}>
+          <Button type="link" onClick={() => ignore(bridge.openCustomer(r.prospect_id, "contacts"))}>
             详情 / 验证
           </Button>
           <Button
@@ -1084,6 +1180,9 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
             <Text type="secondary">企业、岗位与邮箱，分开核对，集中推进。</Text>
           </div>
           <Space wrap>
+            <Tooltip title="按公司名、销售阶段和到期跟进条件导出">
+              <Button onClick={() => ignore(bridge.exportCustomers())}>导出客户 CSV</Button>
+            </Tooltip>
             <Button
               icon={<UploadOutlined aria-hidden="true" />}
               onClick={() => {
@@ -1346,7 +1445,12 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
             description={data.workbenchError}
             showIcon
             action={
-              <Button onClick={() => ignore(bridge.refresh())}>重试</Button>
+              <Space wrap>
+                <Button onClick={() => ignore(bridge.refresh())}>重试</Button>
+                {data.workbenchError.includes("暂不可用") && (
+                  <Button href="?legacy=true#customers">打开兼容版客户列表</Button>
+                )}
+              </Space>
             }
           />
         )}
@@ -1513,12 +1617,6 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
           onSaved={() => ignore(bridge.refresh())}
         />
       )}
-      <CustomerDrawer
-        id={drawer}
-        bridge={bridge}
-        capabilities={wb.capabilities || {}}
-        onClose={() => setDrawer(null)}
-      />
       <Modal
         title="保存当前筛选视图"
         open={viewModal}
@@ -1824,7 +1922,6 @@ function Workspace() {
       children: [
         { key: "discover", icon: <ThunderboltOutlined />, label: "发现客户" },
         { key: "workbench", icon: <TeamOutlined />, label: "客户工作台" },
-        { key: "customers", icon: <ContactsOutlined />, label: "客户档案" },
         { key: "jobs", icon: <UnorderedListOutlined />, label: "任务管理" },
       ],
     },
@@ -1968,15 +2065,22 @@ function Workspace() {
                   </h1>
                   {description && <Text type="secondary">{description}</Text>}
                 </div>
-                <Button
-                  id="refresh"
-                  hidden={showSectionHome && tab !== "my-overview"}
-                  aria-label="刷新当前页面数据"
-                  icon={<ReloadOutlined spin={data?.loading} />}
-                  disabled={!bridge || data?.loading}
-                >
-                  刷新数据
-                </Button>
+                <Space wrap className="page-header-actions">
+                  {bridge && data?.customerId && ["directory", "job-view", "jobs"].includes(tab) && (
+                    <Button icon={<ArrowRightOutlined aria-hidden="true" rotate={180} />} onClick={() => ignore(bridge.navigate("workbench"))}>
+                      返回客户详情
+                    </Button>
+                  )}
+                  <Button
+                    id="refresh"
+                    hidden={showSectionHome && tab !== "my-overview"}
+                    aria-label="刷新当前页面数据"
+                    icon={<ReloadOutlined spin={data?.loading} />}
+                    disabled={!bridge || data?.loading}
+                  >
+                    刷新数据
+                  </Button>
+                </Space>
               </div>
               {bridge && data?.session && (
                 <div key={data.session?.workspace_id || "signed-out"}>
@@ -1989,6 +2093,12 @@ function Workspace() {
                     <Workbench data={data} bridge={bridge} />
                   )}{" "}
                   {tab === "jobs" && <Tasks data={data} bridge={bridge} />}
+                  {data.customerId && (
+                    <CustomerDrawer key={data.customerId} id={data.customerId} initialTab={data.customerTab}
+                      active={tab === "workbench"} bridge={bridge}
+                      capabilities={data.workbench.capabilities || {}} prices={data.prices || {}}
+                      pointQuotes={data.pointQuotes || {}} />
+                  )}
                 </div>
               )}
               <Legacy html={pages} className="business-pages" />

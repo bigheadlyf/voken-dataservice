@@ -59,6 +59,7 @@ test("top-level navigation keeps customer tools in their section on desktop and 
     primary.getByRole("button", { name: "客户与商机", exact: true }),
   ).toHaveAttribute("aria-current", "true");
   await expect(customers).toBeVisible();
+  await expect(customers.getByRole("menuitem", { name: /客户档案/ })).toHaveCount(0);
   await primary
     .getByRole("button", { name: "订单与收款", exact: true })
     .click();
@@ -262,6 +263,8 @@ test("batch reminder validates intervals and clears selection after saving", asy
   await expect(page.getByRole("dialog")).toHaveAccessibleName(
     "为 2 家企业安排跟进",
   );
+  await expect(page.getByRole("dialog").getByLabel("后续提醒（相对首次的天数）", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "设置多轮提醒", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByLabel("后续提醒（相对首次的天数）", { exact: true })
@@ -317,30 +320,56 @@ test("CSV preview and confirmed import use multipart then refresh the native tab
   await expect(page.getByText("共 1 条记录", { exact: true })).toBeVisible();
 });
 
-test("legacy customer edit and draft generation integrate with native navigation", async ({
+test("customer edits, follow-up and search stay on the workbench and draft tasks return to the same customer", async ({
   page,
 }) => {
+  await page.goto("/app#customers");
+  await expect(page).toHaveURL(/#workbench$/);
   await query(page, "Acceptance Buyer 63");
   await page.getByRole("button", { name: "详情", exact: true }).click();
-  await page
-    .getByRole("button", { name: "编辑档案与跟进", exact: true })
-    .click();
-  await expect(page.locator("#prospect-form")).toBeVisible();
-  await page.locator("#prospect-form [name=stage]").selectOption("qualified");
-  await page.locator("#prospect-form [name=tags]").fill("acceptance-reviewed");
-  await page.getByRole("button", { name: "保存跟进设置", exact: true }).click();
-  await expect(page.locator("#refresh")).toBeEnabled();
-  await page
-    .locator("#activity-form [name=content]")
-    .fill("Acceptance customer note");
-  await page.locator("#activity-form button[type=submit]").click();
-  await expect(page.locator("#customer-detail")).toContainText(
-    "Acceptance customer note",
+  const customer = page.getByRole("dialog", { name: "Acceptance Buyer 63", exact: true });
+  await customer.getByRole("button", { name: "改阶段", exact: true }).click();
+  const stage = page.getByRole("dialog", { name: "修改销售阶段", exact: true });
+  await stage.getByRole("combobox", { name: "销售阶段", exact: true }).click();
+  await page.getByRole("option", { name: "已筛选", exact: true }).click();
+  const patch = page.waitForRequest((request) =>
+    request.method() === "PATCH" && /\/crm\/prospects\/[a-f0-9]+$/.test(request.url()),
   );
-  await page.locator("#draft-form button[type=submit]").click();
+  await stage.getByRole("button", { name: "保存", exact: true }).click();
+  expect((await patch).postDataJSON()).toEqual({ expected_version: expect.any(Number), stage: "qualified" });
+  await expect(customer.getByText("已筛选", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/#workbench$/);
+
+  await customer.getByRole("button", { name: "改标签", exact: true }).click();
+  const tags = page.getByRole("dialog", { name: "修改标签", exact: true });
+  await tags.getByRole("textbox", { name: "标签", exact: true }).fill("acceptance-reviewed");
+  await tags.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(customer.getByText("acceptance-reviewed", { exact: true })).toBeVisible();
+
+  await customer.getByRole("tab", { name: /联系人/ }).click();
+  await customer.getByRole("button", { name: "精准联系人检索", exact: true }).click();
+  const search = page.getByRole("dialog", { name: "精准联系人检索", exact: true });
+  await expect(search.getByLabel("企业名称", { exact: true })).toHaveValue("Acceptance Buyer 63");
+  await expect(search.getByLabel("已核对的企业官网", { exact: true })).toHaveValue("https://example.test");
+  await expect(search.getByRole("checkbox", { name: /同意预占/ })).not.toBeChecked();
+  await expect(page).toHaveURL(/#workbench$/);
+  await search.getByRole("button", { name: "取消", exact: true }).click();
+
+  await customer.getByRole("button", { name: "记录跟进", exact: true }).click();
+  const followup = page.getByRole("dialog", { name: "记录跟进", exact: true });
+  await followup.getByRole("textbox", { name: "跟进内容" }).fill("Acceptance customer note");
+  await followup.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(customer).toContainText("Acceptance customer note");
+  await customer.getByRole("button", { name: "写开发信", exact: true }).click();
+  await page.getByRole("dialog", { name: "写开发信", exact: true })
+    .getByRole("button", { name: /^生成草稿/ }).click();
   await expect(page.locator("#job-detail")).toContainText("LED introduction", {
     timeout: 30_000,
   });
+  await page.getByRole("button", { name: "返回客户详情", exact: true }).click();
+  await expect(customer).toContainText("Acceptance customer note");
+  await customer.getByRole("button", { name: "关闭详情", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "搜索企业、姓名或邮箱", exact: true })).toHaveValue("Acceptance Buyer 63");
 });
 
 test("basic discovery runs through the real queue and renders results", async ({
@@ -351,13 +380,10 @@ test("basic discovery runs through the real queue and renders results", async ({
     .click();
   await page.getByRole("tab", { name: "自行填写表单", exact: true }).click();
   const form = page.locator("#discovery-form");
-  await form.locator("[name=name]").fill("Acceptance discovery");
+  await expect(form.locator("[name=name]")).toBeHidden();
+  await expect(form.locator("[name=contact_target]")).toBeHidden();
   await form.locator("[name=market]").fill("US");
   await form.locator("[name=product]").fill("LED");
-  await form.locator("[name=target_count]").fill("1");
-  await form
-    .locator("[name=instructions]")
-    .fill("Find US LED buyers with dated procurement evidence.");
   await form.locator("[name=tier]").selectOption("enhanced");
   await form.locator("button[type=submit]").click();
   await expect(
@@ -365,11 +391,19 @@ test("basic discovery runs through the real queue and renders results", async ({
   ).toBeVisible();
   await expect(page).toHaveURL(/#discover$/);
   await form.locator("[name=tier]").selectOption("basic");
+  const agent = page.waitForRequest((request) =>
+    request.method() === "POST" && request.url().endsWith("/agents"),
+  );
   await form.locator("button[type=submit]").click();
+  expect((await agent).postDataJSON()).toMatchObject({ name: "US · LED", target_count: 10 });
   await expect(page).toHaveURL(/#jobs\//);
   await expect(page.locator("#job-detail")).toContainText("Fixture Buyer", {
     timeout: 30_000,
   });
+  await page.getByRole("button", { name: "保存客户", exact: true }).first().click();
+  await page.getByRole("button", { name: "查看已保存客户", exact: true }).click();
+  await expect(page).toHaveURL(/#workbench$/);
+  await expect(page.getByRole("dialog", { name: /Fixture Buyer/ })).toBeVisible();
 });
 
 test("all navigation panels load without unexpected API errors", async ({

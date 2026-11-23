@@ -389,6 +389,8 @@ function clearWorkspaceView() {
   }
   $("#company-form").reset();
   $("#discovery-form").reset();
+  if ($("#discovery-form-options")) $("#discovery-form-options").open = false;
+  if ($("#discovery-contact-target")) $("#discovery-contact-target").hidden = true;
   $("#paid-label").hidden = true;
 }
 function pendingSubmission(slot, payload) {
@@ -430,6 +432,8 @@ function updateDiscoveryPrice() {
   const targetedQuote = state.pointQuotes?.targeted_contacts;
   if (targetedQuote && $("#targeted-contact-price")) $("#targeted-contact-price").textContent = `本次最多预占 ${targetedQuote.total_points} 点：平台 ${targetedQuote.platform_points} 点，数据预算 ${targetedQuote.data_points} 点。最多两次 Hunter 岗位查询，未使用部分释放；积分单独记录，不自动发信。`;
   const tier = $('#discovery-form [name="tier"]').value;
+  const contactTarget = $("#discovery-contact-target");
+  if (contactTarget) contactTarget.hidden = tier !== "ai_enhanced";
   const quote =
     state.pointQuotes?.[
       tier === "ai_enhanced" ? "prospecting_ai_enhanced" : tier !== "basic" ? "prospecting_enhanced" : "prospecting"
@@ -739,6 +743,19 @@ function download(filename, content, type) {
 function currentDraft() {
   return JSON.parse($("#job-detail").dataset.job || "{}").result?.draft;
 }
+async function submitDraft(id, data) {
+  const slot = "voken-draft-" + state.session.workspace_id;
+  const key = pendingSubmission(slot, { prospect: id, ...data });
+  const job = await api(root() + `/crm/prospects/${id}/drafts`, {
+    method: "POST",
+    headers: { "Idempotency-Key": key },
+    body: JSON.stringify(data),
+  });
+  clearSubmission(slot);
+  state.selectedJob = job.id;
+  await switchTab("jobs");
+  await loadGlobal();
+}
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
@@ -758,6 +775,7 @@ document.addEventListener("click", (event) => {
     });
   if (button.dataset.prospectJump)
     return void runAction(button, async () => {
+      if (window.voken) return window.voken.openCustomer(button.dataset.prospectJump);
       await switchTab("customers");
       await selectProspect(button.dataset.prospectJump);
     });
@@ -775,8 +793,16 @@ document.addEventListener("click", (event) => {
       toast(
         `已保存 ${result.created} 位客户，复用 ${result.reused} 位已有客户`,
       );
+      if (window.voken && button.dataset.saveLead !== undefined && result.items?.length === 1) {
+        delete button.dataset.saveLead;
+        button.dataset.prospectJump = result.items[0].id;
+        button.textContent = "查看已保存客户";
+      }
     });
 });
+function discoveryTaskName(data) {
+  return data.name?.trim() || Array.from(`${data.market.trim()} · ${data.product.trim()}`).slice(0, 80).join("");
+}
 async function createDiscoveryTask(configuration, tier, enhanced, contactTarget = "procurement") {
   if (state.discoverySubmitting) throw new Error("任务正在提交，请稍候，避免重复创建。");
   state.discoverySubmitting = true;
@@ -848,7 +874,7 @@ document.addEventListener("submit", (event) => {
       toast("注册成功，请登录");
     } else if (form.id === "discovery-form") {
       const configuration = {
-        name: data.name,
+        name: discoveryTaskName(data),
         instructions: data.instructions?.trim() || `寻找${data.market}的${data.product}潜在采购客户，按客户角色筛选并保留公开依据。`,
         market: data.market,
         product: data.product,
@@ -912,18 +938,7 @@ document.addEventListener("submit", (event) => {
       await selectProspect(id);
       toast("记录已保存");
     } else if (form.id === "draft-form") {
-      const id = state.selectedProspect.id;
-      const slot = "voken-draft-" + state.session.workspace_id;
-      const key = pendingSubmission(slot, { prospect: id, ...data });
-      const job = await api(root() + `/crm/prospects/${id}/drafts`, {
-        method: "POST",
-        headers: { "Idempotency-Key": key },
-        body: JSON.stringify(data),
-      });
-      clearSubmission(slot);
-      state.selectedJob = job.id;
-      await loadGlobal();
-      await switchTab("jobs");
+      await submitDraft(state.selectedProspect.id, data);
     } else if (form.id === "source-form") {
       const payload = {
         source_id: data.source_id,
@@ -1027,6 +1042,10 @@ $("#discovery-form [name=tier]").onchange = (event) => {
   $("#paid-label").hidden = event.target.value === "basic";
   updateDiscoveryPrice();
 };
+document.addEventListener("invalid", (event) => {
+  const options = event.target.closest?.("#discovery-form-options");
+  if (options) options.open = true;
+}, true);
 $("#stage-filter").insertAdjacentHTML(
   "beforeend",
   Object.entries(stages)
@@ -1057,13 +1076,18 @@ $("#export").onclick = () =>
     const params = filters();
     params.delete("offset");
     params.delete("limit");
-    const response = await fetch(
-      root() + "/crm/prospects/export.csv?" + params,
-      { headers: { Authorization: `Bearer ${state.session.access_token}` } },
-    );
-    if (!response.ok) throw new Error("导出失败，请缩小筛选范围后重试");
-    download("prospects.csv", await response.text(), "text/csv;charset=utf-8");
+    await exportProspects(params);
   });
+async function exportProspects(params) {
+  const session = state.session;
+  const response = await fetch(
+    root() + "/crm/prospects/export.csv?" + params,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+  if (!response.ok) throw new Error("导出失败，请缩小筛选范围后重试");
+  const content = await response.text();
+  if (session === state.session) download("prospects.csv", content, "text/csv;charset=utf-8");
+}
 document.addEventListener("click", (event) => {
   if (event.target.id === "copy-draft")
     void runAction(event.target, async () => {

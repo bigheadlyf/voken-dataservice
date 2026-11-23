@@ -9,6 +9,10 @@ export interface ProspectingAgent {
 export interface Snapshot {
   session: RecordData | null;
   tab: string;
+  customerId: string | null;
+  customerTab: string;
+  prices: RecordData;
+  pointQuotes: RecordData;
   balance: string;
   summary: RecordData | null;
   dashboardAgents: ProspectingAgent[] | null;
@@ -26,7 +30,15 @@ export interface Bridge {
   select(ids: string[]): void;
   detail(id: string): Promise<RecordData>;
   post(path: string, body: RecordData, slot?: string): Promise<RecordData>;
-  edit(id: string): Promise<void>;
+  openCustomer(id: string, tab?: "profile" | "contacts"): Promise<void>;
+  closeCustomer(): void;
+  updateCustomer(id: string, version: number, changes: RecordData): Promise<RecordData>;
+  recordActivity(id: string, values: RecordData): Promise<RecordData>;
+  createDraft(id: string, values: RecordData): Promise<void>;
+  searchCustomerContacts(id: string, kind: "company" | "targeted", values: RecordData): Promise<void>;
+  applySourceContact(id: string, values: RecordData): Promise<RecordData>;
+  refreshCustomers(): Promise<void>;
+  exportCustomers(): Promise<void>;
   action(fn: () => Promise<unknown>): Promise<void>;
   saveView(name: string): Promise<void>;
   applyView(index: number): Promise<void>;

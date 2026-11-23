@@ -4,7 +4,7 @@
               <p class="eyebrow">下一段增长，从一次对话开始</p>
               <h2>让下一次增长，<br />从<em>对的客户</em>开始。</h2>
               <p>从产品与市场出发，建立有来源、可跟进的客户清单。</p>
-              <div class="actions"><button data-tab="discover" class="light">创建找客户任务 ↗</button><button data-tab="customers" class="hero-secondary">查看客户管理 →</button></div>
+              <div class="actions"><button data-tab="discover" class="light">创建找客户任务 ↗</button><button data-tab="workbench" class="hero-secondary">查看客户工作台 →</button></div>
             </div>
             <div class="assistant-preview" aria-label="客户开发流程">
               <div class="assistant-heading"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="4"/><path d="M12 2v4M8 12h.01M16 12h.01M8 16c2 2 6 2 8 0M1 11v5M23 11v5"/></svg><b>你的 AI 拓客助手</b></div>
@@ -16,7 +16,7 @@
           <div class="workflow-guide" aria-label="客户开发四步流程">
             <button data-tab="discover"><span>01</span><b>搜索客户</b><small>描述产品与市场，创建任务</small></button>
             <button data-tab="jobs"><span>02</span><b>筛选客户</b><small>查看结果，核对匹配与来源</small></button>
-            <button data-tab="customers"><span>03</span><b>保存客户</b><small>建立客户库，安排下一次跟进</small></button>
+            <button data-tab="workbench"><span>03</span><b>保存客户</b><small>建立客户库，安排下一次跟进</small></button>
             <button data-tab="mail"><span>04</span><b>邮件触达</b><small>审阅开发信，确认后发送</small></button>
           </div>
           <div id="stats" class="stats"></div>
@@ -54,15 +54,6 @@
           <div class="grid-two discovery-layout">
             <div id="discovery-form-pane" role="tabpanel" aria-labelledby="discovery-form-tab" hidden>
             <form id="discovery-form" class="panel">
-              <p class="eyebrow">告诉 AI 你的目标</p>
-              <h2>下一批客户在哪里？</h2>
-              <label
-                >任务名称<input
-                  name="name"
-                  required
-                  maxlength="80"
-                  placeholder="例如：德国商用照明渠道"
-              /></label>
               <div class="form-row">
                 <label
                   >目标市场<input
@@ -87,7 +78,11 @@
                   <option value="service_provider">服务商 / 工程商</option>
                   <option value="public_buyer">政府 / 公共机构采购方</option>
                 </select></label
-              ><label
+              >
+              <details id="discovery-form-options" class="advanced-options">
+              <summary>更多条件与任务设置（选填）</summary>
+              <label>任务名称<input name="name" maxlength="80" placeholder="默认使用市场与产品命名" /></label>
+              <label
                 >客户特征与筛选要求（选填）<textarea
                   name="instructions"
                   maxlength="1600"
@@ -113,7 +108,7 @@
                     placeholder="6–10 位数字"
                 /></label>
               </div>
-              <details class="advanced-options"><summary>更多筛选条件（选填）</summary><label
+              <label
                 >理想客户官网（选填）<input
                   name="seed_website"
                   type="url"
@@ -123,7 +118,9 @@
                 >排除条件（逗号分隔）<input
                   name="exclude_keywords"
                   placeholder="货代、无关产品、只做零售" /></label
-              ><label>更多参考客户官网（选填，最多5个，每行一个）<textarea name="reference_websites" rows="2" placeholder="https://buyer-one.com&#10;https://buyer-two.com"></textarea></label><label>排除客户域名（逗号分隔，含子域名）<input name="exclude_domains" placeholder="competitor.com, existing-customer.com" /></label></details>
+              ><label>更多参考客户官网（选填，最多5个，每行一个）<textarea name="reference_websites" rows="2" placeholder="https://buyer-one.com&#10;https://buyer-two.com"></textarea></label><label>排除客户域名（逗号分隔，含子域名）<input name="exclude_domains" placeholder="competitor.com, existing-customer.com" /></label>
+              <label class="check"><input name="ted" type="checkbox" />同时查近 90 天 TED 官方招标（仍须核对时效及投标资格）</label>
+              </details>
               <label
                 >数据方案<select name="tier">
                   <option value="basic">基础发现 · 公开搜索</option>
@@ -132,9 +129,7 @@
                   </option>
                   <option value="ai_enhanced">AI增强档 · 高级档 + 目标岗位联系人（¥7预算）</option><option value="enhanced_contacts">增强发现 · 优先补前2家企业的联系方式</option>
                 </select></label
-              ><label>AI增强目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label><label class="check"
-                ><input name="ted" type="checkbox" />同时查近 90 天 TED
-                官方招标（原生接口无单次数据费；仍须核对时效及投标资格）</label
+              ><label id="discovery-contact-target" hidden>AI增强目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label
               ><label class="check" id="paid-label" hidden
                 ><input name="paid" type="checkbox" />同意按下方当前档位报价预占平台点数与数据预算。按明确回传费用结算并释放差额，异常回传不向钱包追加扣点。</label
               ><div class="actions"><button id="discovery-preview" type="button">先看最多5家真实样本</button><button class="primary" type="submit">开始找客户 →</button></div>
@@ -369,7 +364,7 @@
           <div id="job-detail" class="panel"></div>
         </section>
         <section id="mail" class="tab-panel" hidden>
-          <div class="section-intro"><h2>从草稿到发送，在这里管理</h2><p class="muted">先在客户档案生成开发信，再打开草稿审阅和发送。</p><button data-tab="customers">选择客户写邮件 →</button></div>
+          <div class="section-intro"><h2>从草稿到发送，在这里管理</h2><p class="muted">在客户工作台选择客户写开发信，再打开草稿审阅和发送。</p><button data-tab="workbench">选择客户写邮件 →</button></div>
           <div class="panel"><h3>邮件草稿</h3><div id="mail-drafts" class="task-grid"></div></div>
           <details class="panel" open><summary>自有邮箱发送记录</summary><div id="mail-deliveries"></div></details>
         </section>

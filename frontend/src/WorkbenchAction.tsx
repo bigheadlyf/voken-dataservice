@@ -32,6 +32,7 @@ export function WorkbenchActionModal({
   const [form] = Form.useForm(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [multiRound, setMultiRound] = useState(false);
   const eventType = Form.useWatch("type", form);
   const title =
     action.kind === "review"
@@ -221,8 +222,13 @@ export function WorkbenchActionModal({
                 className="full-width"
               />
             </Form.Item>
-            <Form.Item
+            <Button type="link" className="draft-options" aria-expanded={multiRound}
+              onClick={() => setMultiRound(!multiRound)}>
+              {multiRound ? "收起多轮提醒" : "设置多轮提醒"}
+            </Button>
+            {multiRound && <Form.Item
               name="intervals"
+              preserve={false}
               label="后续提醒（相对首次的天数）"
               rules={[
                 {
@@ -248,7 +254,7 @@ export function WorkbenchActionModal({
               ]}
             >
               <Input placeholder="例如：3,7,14" />
-            </Form.Item>
+            </Form.Item>}
             <Form.Item
               name="objective"
               label="跟进目标"

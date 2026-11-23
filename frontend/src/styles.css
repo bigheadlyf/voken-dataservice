@@ -390,7 +390,7 @@ button:focus-visible {
 .react-page-header .ant-typography {
   font-size: 14px;
 }
-.react-page-header > .ant-btn {
+.page-header-actions .ant-btn {
   font-size: 14px;
   background: #fff;
 }
@@ -762,6 +762,13 @@ button:focus-visible {
 .drawer-evidence {
   margin-top: 20px;
 }
+.customer-contact-tools {
+  margin-bottom: 16px;
+}
+.draft-options.ant-btn {
+  margin-bottom: 12px;
+  padding-inline: 0;
+}
 .customer-drawer .ant-drawer-title {
   overflow-wrap: anywhere;
 }
@@ -1055,7 +1062,7 @@ button:focus-visible {
   .react-page-header .ant-typography {
     font-size: 12px;
   }
-  .react-page-header > .ant-btn {
+  .page-header-actions .ant-btn {
     padding-inline: 10px;
     flex-shrink: 0;
   }

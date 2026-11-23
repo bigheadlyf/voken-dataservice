@@ -4,6 +4,9 @@ const wbVerification = {valid:"独立验证有效",invalid:"无效／不应联�
 const wbWarnings = {email_missing:"尚未取得完整邮箱",domain_relationship_unconfirmed:"邮箱域名与官网关系待核实",recruitment_mailbox:"招聘入口",service_or_quality_mailbox:"服务／质量入口",email_pattern_placeholder:"疑似邮箱格式示例",role_unconfirmed:"岗位未知",supplier_marked_invalid:"供应商曾标记无效"};
 Object.assign(errors, {email_verification_not_configured:"尚未配置独立邮箱验证服务，现有供应商标记保持原样", email_verification_result_unknown:"验证服务未返回可确认结果，请先核对供应商记录，勿直接重复消费", verification_requires_reconciliation:"该次验证结果未确认，请核对供应商记录后再操作", email_verification_daily_limit:"已达到独立邮箱验证日上限", imap_not_configured:"尚未配置收件箱，可先导入 EML 邮件归档", imap_sync_failed:"收件箱同步失败，请核对服务配置", roster_pdf_requires_tabular_text_use_csv:"未识别到分列的 PDF 表格文本，请改用 CSV 或 XLSX", roster_limit_200_rows:"每批最多200行，请拆分名单", roster_formula_not_supported:"名单含公式，请先转成普通值", cohort_planning_failed:"本次未能生成客群方案，请稍后重试"});
 function wbRoot() { return root()+"/crm/workbench"; }
+function wbPreferredTitles() {
+  return ({procurement:"procurement,purchasing,sourcing",leadership:"president,owner,founder",sales:"sales,business development"})[wbFilters().target] || "";
+}
 function wbFilters() {
   const f = $("#wb-filter"), values = formData(f);
   return {...values, has_email:f.elements.has_email.checked, due:f.elements.due.checked, ready_only:f.elements.ready_only.checked};
@@ -117,11 +120,13 @@ document.addEventListener("click",event=>{
   const b=event.target.closest("button"); if(!b) return; const d=b.dataset;
   const relevant=b.id.startsWith("wb-") || Object.keys(d).some(k=>k.startsWith("wb")); if(!relevant || (b.form && b.type==="submit")) return;
   void runAction(b,async()=>{
-    if(d.wbOpen) { await switchTab("customers"); await selectProspect(d.wbOpen); }
+    if(d.wbOpen) {
+      if(window.voken) await window.voken.openCustomer(d.wbOpen);
+      else { await switchTab("customers"); await selectProspect(d.wbOpen); }
+    }
     if(d.wbEnrich) {
       const p=await api(root()+"/crm/prospects/"+d.wbEnrich);
-      const preferred=({procurement:"procurement,purchasing,sourcing",leadership:"president,owner,founder",sales:"sales,business development"})[$("#wb-filter").elements.target.value];
-      await openDirectory(p.name,p.location,null,p.id,preferred);
+      await openDirectory(p.name,p.location,null,p.id,wbPreferredTitles());
       toast("先核对企业，再查询目标岗位；付费查询需单独确认");
     }
     if(d.wbHistory) {

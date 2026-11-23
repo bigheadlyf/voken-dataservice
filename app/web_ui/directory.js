@@ -17,7 +17,7 @@ function directoryConfiguration() {
   const form = $("#discovery-form");
   if (!form.reportValidity()) return null;
   const data = formData(form);
-  return {name:data.name, instructions:data.instructions?.trim() || `寻找${data.market}的${data.product}潜在采购客户，按客户角色筛选并保留公开依据。`, market:data.market, product:data.product,
+  return {name:discoveryTaskName(data), instructions:data.instructions?.trim() || `寻找${data.market}的${data.product}潜在采购客户，按客户角色筛选并保留公开依据。`, market:data.market, product:data.product,
     target_count:Number(data.target_count), buyer_role:data.buyer_role, seed_website:data.seed_website || null,
     public_sources:form.elements.ted.checked ? ["ted"] : [],
     exclude_keywords:data.exclude_keywords.split(/[,，]/).map(x=>x.trim()).filter(Boolean),
@@ -26,10 +26,11 @@ function directoryConfiguration() {
     ...(data.hs_code ? {hs_code:data.hs_code} : {})};
 }
 
-async function directorySubmit(path, payload, slot) {
+async function directorySubmit(path, payload, slot, onAccepted) {
   const keySlot = `voken-directory-${state.session.workspace_id}-${slot}`;
   const job = await api(root()+path,{method:"POST",headers:{"Idempotency-Key":pendingSubmission(keySlot,payload)},body:JSON.stringify(payload)});
   clearSubmission(keySlot);
+  onAccepted?.();
   state.selectedJob = job.id;
   await loadGlobal();
   await switchTab("jobs");
@@ -142,8 +143,11 @@ document.addEventListener("submit", event=> {
     } else if (form.id === "directory-save-contact") {
       if (!data.prospect_id || !form.elements.reviewed.checked) throw new Error("请选择客户并核对企业归属");
       await api(root()+"/crm/workbench/candidates",{method:"POST",body:JSON.stringify({job_id:state.selectedJob,prospect_id:data.prospect_id,confirm_company_match:true})});
-      await switchTab("customers");
-      await selectProspect(data.prospect_id);
+      if (window.voken) await window.voken.openCustomer(data.prospect_id);
+      else {
+        await switchTab("customers");
+        await selectProspect(data.prospect_id);
+      }
       toast("已保存独立候选，客户主邮箱保持原样");
     }
   });

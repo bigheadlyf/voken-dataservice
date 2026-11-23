@@ -6,6 +6,8 @@
     overview:"业务概况",discover:"发现客户",directory:"企业与联系人",sources:"商业情报",company:"企业资料",
   });
   let summary = null, loading = 0, workbenchError = "";
+  let customerId = null;
+  let customerTab = "profile";
   let dashboardAgents = null, dashboardAgentsError = false;
   const publish = () => window.dispatchEvent(new Event("voken:updated"));
   const originalApi = api;
@@ -23,6 +25,7 @@
   const originalClear = clearWorkspaceView;
   clearWorkspaceView = function() {
     summary = null;
+    customerId = null;
     dashboardAgents = null;
     dashboardAgentsError = false;
     window.__vokenWorkbenchSummary = null;
@@ -66,7 +69,8 @@
   switchTab = async function(tab) {
     loading++;
     // originalSwitch updates the route synchronously before its first await.
-    try { const result = originalSwitch(tab); publish(); return await result; }
+    if (!["customers", "workbench", "directory", "jobs", "job-view"].includes(tab) && !tab.startsWith("jobs/")) customerId = null;
+    try { const result = originalSwitch(tab === "customers" ? "workbench" : tab); publish(); return await result; }
     finally { loading--; publish(); }
   };
   const originalWorkbench = loadWorkbench;
@@ -74,7 +78,7 @@
     loading++; publish();
     try {
       const result = await originalWorkbench();
-      if ($("#wb-summary").textContent.startsWith("客户工作台暂不可用")) workbenchError = "客户工作台暂不可用，请重试或使用客户档案。";
+      if ($("#wb-summary").textContent.startsWith("客户工作台暂不可用")) workbenchError = "客户工作台暂不可用，请稍后重试。";
       return result;
     } catch(error) { workbenchError = error.message; throw error; }
     finally { loading--; publish(); }
@@ -92,7 +96,8 @@
   window.voken = {
     snapshot() {
       return {session: state.session ? {workspace_id: state.session.workspace_id} : null,
-        tab:state.tab, balance:$("#balance").textContent, summary, jobs:[...state.jobs],
+        tab:state.tab, customerId, customerTab, prices:state.prices, pointQuotes:state.pointQuotes,
+        balance:$("#balance").textContent, summary, jobs:[...state.jobs],
         dashboardAgents, dashboardAgentsError,
         workbench:{...wb, items:[...wb.items], selected:[...wb.selected], filters:wbFilters(),
           summary:window.__vokenWorkbenchSummary || null}, workbenchError, loading:loading>0};
@@ -110,16 +115,54 @@
     select(ids) { wb.selected=new Set(ids); publish(); },
     async detail(id) {
       const prospect = await api(root()+"/crm/prospects/"+id);
-      const [activities,companies,records] = await Promise.all([
+      const [activities,companies,records,savedContacts] = await Promise.all([
         api(root()+"/crm/prospects/"+id+"/activities"),
         api(wbRoot()+"?mode=companies&limit=100&target="+encodeURIComponent(wbFilters().target)+"&q="+encodeURIComponent(prospect.name)),
         api(wbRoot()+"/history/"+id),
+        api(root()+"/directory/saved-contacts/"+id),
       ]);
       const company=companies.items.find(c=>c.id===id);
-      return {prospect,activities,contacts:company?.contacts || [],duplicates:company?.duplicates || [],records};
+      return {prospect,activities,contacts:company?.contacts || [],duplicates:company?.duplicates || [],records,savedContacts};
     },
     post(path, body, slot) { return perform(()=>wbPost(path,body,slot)); },
-    edit(id) { return perform(async()=> { await switchTab("customers"); await selectProspect(id); }); },
+    async openCustomer(id, tab = "profile") {
+      customerId = id;
+      customerTab = tab;
+      if (state.tab !== "workbench") await this.navigate("workbench");
+      else publish();
+    },
+    closeCustomer() { customerId = null; publish(); },
+    updateCustomer(id, version, changes) {
+      return api(root()+"/crm/prospects/"+id, {
+        method:"PATCH", body:JSON.stringify({...changes, expected_version:version}),
+      });
+    },
+    recordActivity(id, values) {
+      return api(root()+"/crm/prospects/"+id+"/activities", {method:"POST", body:JSON.stringify(values)});
+    },
+    createDraft(id, values) { return submitDraft(id, values); },
+    searchCustomerContacts(id, kind, values) {
+      const targeted = kind === "targeted";
+      const preferredTitles = targeted ? "" : wbPreferredTitles();
+      return directorySubmit(targeted ? "/directory/targeted-contacts" : "/directory/searches",
+        values, targeted ? "targeted" : "search", () => {
+          directorySelection = null;
+          directoryTarget = id;
+          directoryPreferredTitles = preferredTitles;
+        });
+    },
+    applySourceContact(id, values) {
+      return api(root()+"/crm/prospects/"+id+"/apply-contact", {method:"POST", body:JSON.stringify(values)});
+    },
+    refreshCustomers() { return perform(loadWorkbench); },
+    exportCustomers() {
+      const {q,stage,due}=wbFilters();
+      const params=new URLSearchParams();
+      if(q) params.set("q",q);
+      if(stage) params.set("stage",stage);
+      if(due) params.set("due","true");
+      return perform(()=>exportProspects(params));
+    },
     action:perform,
     saveView(name) { return perform(async()=> { await wbPost("/views",{...wbFilters(),name}); await loadWorkbench(); toast("筛选视图已保存"); }); },
     applyView(index) {
