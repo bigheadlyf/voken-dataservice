@@ -1,12 +1,13 @@
 from datetime import timedelta
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from sqlalchemy import select
 from app.db import RequestAttempt, utcnow, write_transaction
 from app.request_limits import consume
 from app.config import Settings
+from app.deepseek import ProviderError
 from fastapi import HTTPException
 import test_service
 
@@ -145,3 +146,94 @@ class OnboardingTest(TestCase):
         self.assertEqual(self.client.get(root+'/certification',headers=token).json()['status'],'needs_confirmation')
         _,other=self.register_and_login('13800000001')
         self.assertEqual(self.client.get(root+'/certification',headers=other).status_code,404)
+
+    def test_website_analysis_keeps_only_entries_with_exact_quotes(self):
+        workspace, token = self.register_and_login('13800000000')
+        website = 'http://fixture.example.org/'
+        output = {
+            'profile': {'name': 'Fixture Lighting', 'products': 'LED fixtures', 'advantages': ['Too bright'],
+                        'website': 'https://another.example.org/'},
+            'profile_evidence': {'name': 'User supplied name', 'products': 'LED fixtures',
+                                 'advantages': 'Fixture Lighting'},
+            'memories': [
+                {'key': 'products', 'title': 'Products', 'content': 'LED fixtures', 'evidence': 'LED fixtures'},
+                {'key': 'products', 'title': 'Duplicate', 'content': 'LED fixtures', 'evidence': 'LED fixtures'},
+                {'key': 'certified', 'title': 'Certification', 'content': 'Certified', 'evidence': 'certified'},
+                {'key': 'verified', 'title': 'Verified', 'content': 'LED fixtures', 'evidence': 'LED fixtures',
+                 'verification_status': 'confirmed'},
+            ],
+        }
+        provider = Mock()
+        provider.fetch.return_value = {'content': 'Fixture Lighting manufactures LED fixtures.'}
+        provider.complete.return_value = {'output': output}
+        self.app.state.chat_provider = provider
+
+        result = self.client.post(f'/api/v1/workspaces/{workspace}/company/web-analyses',
+                                  headers=token, json={'website': website, 'name': 'User supplied name'})
+        self.assertEqual(result.status_code, 201, result.text)
+        proposal = result.json()['proposal']
+        self.assertEqual(proposal['profile']['products'], 'LED fixtures')
+        self.assertIsNone(proposal['profile']['name'])
+        self.assertIsNone(proposal['profile']['advantages'])
+        self.assertEqual(proposal['profile']['website'], website)
+        self.assertEqual(proposal['profile_evidence'], {'products': 'LED fixtures', 'website': website})
+        self.assertEqual([memory['title'] for memory in proposal['memories']], ['Products'])
+        provider.complete.assert_called_once()
+
+    def test_website_analysis_retries_once_with_the_same_page_text(self):
+        workspace, token = self.register_and_login('13800000000')
+        endpoint = f'/api/v1/workspaces/{workspace}/company/web-analyses'
+        website = 'http://fixture.example.org/'
+        provider = Mock()
+        provider.fetch.return_value = {'content': 'Fixture Lighting manufactures LED fixtures.'}
+        provider.complete.side_effect = [
+            ProviderError('deepseek_invalid_model_output'),
+            {'output': [
+                {'field': 'name', 'value': 'Fixture Lighting', 'evidence': 'Fixture Lighting'},
+                {'text': '{"products":"LED fixtures","products_evidence":"LED fixtures"}'},
+                {'text': 'not JSON'},
+            ]},
+        ]
+        self.app.state.chat_provider = provider
+
+        result = self.client.post(endpoint, headers=token, json={'website': website})
+        self.assertEqual(result.status_code, 201, result.text)
+        self.assertEqual(result.json()['proposal']['profile']['name'], 'Fixture Lighting')
+        self.assertEqual(result.json()['proposal']['profile']['products'], 'LED fixtures')
+        provider.fetch.assert_called_once_with(website)
+        self.assertEqual([call.args[3] for call in provider.complete.call_args_list], ['analysis', 'judgment'])
+        self.assertEqual(provider.complete.call_args_list[0].args[1], provider.complete.call_args_list[1].args[1])
+        self.assertTrue(provider.complete.call_args_list[1].kwargs['allow_object_list'])
+
+        provider.reset_mock()
+        provider.complete.side_effect = [
+            {'output': {'profile': {'name': 'Other Company'},
+                        'profile_evidence': {'name': 'Other Company'}, 'memories': []}},
+            ProviderError('deepseek_invalid_model_output'),
+        ]
+        failed = self.client.post(endpoint, headers=token, json={'website': website})
+        self.assertEqual(failed.status_code, 502, failed.text)
+        self.assertEqual(failed.json()['detail'], 'invalid_company_website_analysis')
+        self.assertEqual(provider.complete.call_count, 2)
+
+    def test_website_analysis_fills_missing_products_without_losing_evidenced_entries(self):
+        workspace, token = self.register_and_login('13800000000')
+        endpoint = f'/api/v1/workspaces/{workspace}/company/web-analyses'
+        provider = Mock()
+        provider.fetch.return_value = {'content': 'Fixture Lighting manufactures LED fixtures.'}
+        provider.complete.side_effect = [
+            {'output': {'profile': {'name': 'Fixture Lighting'},
+                        'profile_evidence': {'name': 'Fixture Lighting'},
+                        'memories': [{'key': 'manufacturing', 'title': 'Manufacturing',
+                                      'content': 'Manufactures LED fixtures', 'evidence': 'manufactures LED fixtures'}]}},
+            {'output': {'products': 'LED fixtures', 'products_evidence': 'LED fixtures'}},
+        ]
+        self.app.state.chat_provider = provider
+
+        result = self.client.post(endpoint, headers=token, json={'website': 'https://fixture.example.org/'})
+        self.assertEqual(result.status_code, 201, result.text)
+        proposal = result.json()['proposal']
+        self.assertEqual(proposal['profile']['name'], 'Fixture Lighting')
+        self.assertEqual(proposal['profile']['products'], 'LED fixtures')
+        self.assertEqual(proposal['memories'][0]['key'], 'manufacturing')
+        provider.fetch.assert_called_once()

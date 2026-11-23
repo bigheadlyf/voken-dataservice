@@ -33,6 +33,7 @@ Object.assign(errors, {
   company_memory_key_conflict:
     "已有同名共享记忆。可在资料表单中手动保存所需字段，避免覆盖旧记忆。",
   company_website_has_no_readable_text: "该页面没有可读取正文，可改用介绍文件",
+  invalid_company_website_analysis: "已读取网页，但未能生成带原文引文的企业资料。可重试或上传介绍文件",
   smtp_not_configured: "自有邮箱通道未启用，仍可下载 .eml 后自行发送",
   smtp_daily_limit: "已达到今日发送限额",
   delivery_recipient_changed: "客户联系方式已改变，请重新审阅收件人",

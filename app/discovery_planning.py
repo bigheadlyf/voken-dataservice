@@ -91,6 +91,15 @@ current_configuration是上次已整理的配置，修改时保留未修改的�
 只规划客户发现，不处理付款、短信、外发邮件。'''
 
 
+def validate_plan(output: dict) -> PlanResponse:
+    # Some gateways return only the configuration member. It still must pass the
+    # same strict validation as a configuration inside a full response.
+    if isinstance(output, dict) and {'name', 'instructions', 'market', 'product'} <= output.keys():
+        configuration = Configuration.model_validate(output)
+        return PlanResponse(reply='请核对任务方案和点数，确认后再点击创建。', configuration=configuration)
+    return PlanResponse.model_validate(output)
+
+
 @router.post('/plan', response_model=PlanResponse)
 def plan(body: PlanRequest, request: Request, workspace: ws.WorkspaceAccess, sessions: ws.Sessions):
     """多轮整理发现客户的任务方案；无执行工具，不创建员工或任务，也不预占任务点数。"""
@@ -103,7 +112,7 @@ def plan(body: PlanRequest, request: Request, workspace: ws.WorkspaceAccess, ses
             'current_configuration': body.current_configuration.model_dump() if body.current_configuration else None,
             'company': company_context(sessions, workspace),
         }, 2200, 'chat')
-        return PlanResponse.model_validate(result['output'])
+        return validate_plan(result['output'])
     except ProviderError as error:
         raise HTTPException(503 if error.code == 'deepseek_not_configured' else 502, error.code) from None
     except (ValidationError, KeyError, TypeError):

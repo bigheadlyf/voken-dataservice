@@ -33,6 +33,7 @@ class ModelRoutingTest(TestCase):
                         self.assertEqual(result['model'], model)
                         self.assertEqual(result['scenario'], scenario)
                 self.assertEqual([body['model'] for body in requests], expected)
+                self.assertTrue(all(body['response_format'] == {'type': 'json_object'} for body in requests))
                 if expected[2].startswith('qwen'):
                     self.assertIn('Task instructions:', requests[2]['messages'][1]['content'])
                     self.assertNotIn('Task instructions:', requests[0]['messages'][1]['content'])
@@ -101,7 +102,9 @@ class ModelRoutingTest(TestCase):
         ])
         self.assertEqual([request.headers['Authorization'] for request in requests],
                          ['Bearer model-key', 'Bearer tools-key', 'Bearer tools-key'])
-        self.assertEqual(json.loads(requests[0].content)['model'], 'qwen4-max')
+        completion_request = json.loads(requests[0].content)
+        self.assertEqual(completion_request['model'], 'qwen4-max')
+        self.assertNotIn('response_format', completion_request)
 
     def test_default_model_remains_deepseek(self):
         settings = Settings()
@@ -138,8 +141,42 @@ class ModelRoutingTest(TestCase):
         self.assertEqual(result['output'], {'queries': ['LED France']})
         self.assertEqual(result['usage'], {'completion_tokens': 12})
 
+    def test_gateway_json_fence_is_removed(self):
+        provider = DeepSeek(Settings(llm_api_key='model-key'))
+        self.addCleanup(provider.close)
+        content = '  ```JSON\r\n{"queries":["LED France"]}\r\n```\n'
+        with patch.object(provider, '_post', return_value={'choices': [{'message': {'content': content}}]}):
+            result = provider.complete('Return JSON', {}, 100)
+        self.assertEqual(result['output'], {'queries': ['LED France']})
+
+    def test_gateway_text_item_wraps_the_complete_json_object(self):
+        provider = DeepSeek(Settings(llm_api_key='model-key'))
+        self.addCleanup(provider.close)
+        expected = {'reply': '请核对', 'configuration': None, 'questions': []}
+        content = json.dumps([{'text': json.dumps(expected, ensure_ascii=False)}])
+        with patch.object(provider, '_post', return_value={'choices': [{'message': {'content': content}}]}):
+            result = provider.complete('Return JSON', {}, 100)
+        self.assertEqual(result['output'], expected)
+
+    def test_object_list_requires_explicit_opt_in(self):
+        provider = DeepSeek(Settings(llm_api_key='model-key'))
+        self.addCleanup(provider.close)
+        for rows in ([{'name': 'Company'}, {'products': 'LED'}], [{'name': 'Company'}, 'unexpected']):
+            with self.subTest(rows=rows), patch.object(provider, '_post', return_value={
+                'choices': [{'message': {'content': json.dumps(rows)}}],
+            }):
+                with self.assertRaises(ProviderError):
+                    provider.complete('Return JSON', {}, 100)
+                if isinstance(rows[1], dict):
+                    result = provider.complete('Return JSON', {}, 100, allow_object_list=True)
+                    self.assertEqual(result['output'], rows)
+                else:
+                    with self.assertRaises(ProviderError):
+                        provider.complete('Return JSON', {}, 100, allow_object_list=True)
+
     def test_ambiguous_or_malformed_output_is_rejected(self):
-        for content in ['[{"a":1},{"a":2}]', '[]', '[1]', '{"queries":', 'null']:
+        for content in ['[{"a":1},{"a":2}]', '[]', '[1]', '{"queries":', 'null',
+                        'Explanation\n```json\n{"a":1}\n```', '```json\n{"a":1}\n```\n```json\n{"b":2}\n```']:
             with self.subTest(content=content):
                 provider = DeepSeek(Settings(llm_api_key='model-key'))
                 provider.close()

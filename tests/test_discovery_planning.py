@@ -43,6 +43,30 @@ class DiscoveryPlanningTest(TestCase):
             self.assertEqual(session.scalar(select(func.count()).select_from(Job)), 0)
             self.assertEqual(session.get(Wallet, workspace).available, 1000)
 
+    def test_bare_configuration_is_validated_and_returned_for_user_confirmation(self):
+        workspace = self.setup_account()
+        configuration = {
+            'name': '德国照明经销商', 'instructions': '排除零售商', 'market': '德国', 'product': 'LED灯具',
+            'target_count': 5, 'buyer_role': 'distributor', 'exclude_keywords': ['零售商'],
+        }
+        self.provider.complete.return_value = {'output': configuration}
+        response = self.client.post(self.path, headers=self.headers, json={'content': '找5家德国LED灯具经销商'})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['configuration']['target_count'], 5)
+        self.assertEqual(response.json()['configuration']['exclude_keywords'], ['零售商'])
+        self.assertIn('确认', response.json()['reply'])
+        self.assertEqual(response.json()['questions'], [])
+        with self.sessions() as session:
+            self.assertEqual(session.scalar(select(func.count()).select_from(Agent)), 0)
+            self.assertEqual(session.scalar(select(func.count()).select_from(Job)), 0)
+            self.assertEqual(session.get(Wallet, workspace).available, 1000)
+
+        for invalid in [{'target_count': '5'}, {'tool_call': {'name': 'start_task'}}]:
+            with self.subTest(invalid=invalid):
+                self.provider.complete.return_value = {'output': {**configuration, **invalid}}
+                response = self.client.post(self.path, headers=self.headers, json={'content': '生成方案'})
+                self.assertEqual(response.status_code, 502, response.text)
+
     def test_invalid_and_tool_outputs_are_rejected(self):
         self.setup_account()
         for output in [

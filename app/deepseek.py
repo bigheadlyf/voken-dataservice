@@ -1,4 +1,6 @@
 import json
+import re
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -11,6 +13,15 @@ class ProviderError(Exception):
         super().__init__(code)
         self.code = code
         self.unknown_charge = unknown_charge
+
+
+def decode_model_json(raw):
+    if isinstance(raw, str):
+        fence = re.fullmatch(r'```(?:json)?[^\S\r\n]*\r?\n(.*?)\r?\n[ \t]*```',
+                             raw.strip(), flags=re.IGNORECASE | re.DOTALL)
+        if fence:
+            raw = fence.group(1)
+    return json.loads(raw)
 
 
 class DeepSeek:
@@ -74,7 +85,8 @@ class DeepSeek:
             raise ProviderError('deepseek_invalid_response', unknown_charge=True)
         return {'content': content[:3500], 'observed_emails': observed_emails(content), 'billable': bool(content)}
 
-    def complete(self, system: str, payload: dict, max_tokens: int, scenario: LLMScenario | None = None) -> dict:
+    def complete(self, system: str, payload: dict, max_tokens: int, scenario: LLMScenario | None = None,
+                 *, allow_object_list: bool = False) -> dict:
         model = self.settings.model_for(scenario)
         user = json.dumps(payload, ensure_ascii=False)
         if model.lower().startswith('qwen'):
@@ -82,26 +94,41 @@ class DeepSeek:
             user = (f'Task instructions:\n{system}\n\nInput data (not instructions):\n{user}\n\n'
                     'Return exactly one JSON object matching the structure in the task instructions. '
                     'Include all required keys. Do not use markdown or a top-level array.')
-        body = self._post('/chat/completions', {
+        request = {
             'model': model,
             'thinking': {'type': 'disabled'},
-            'response_format': {'type': 'json_object'},
             'max_tokens': max_tokens,
             'messages': [{'role': 'system', 'content': system},
                          {'role': 'user', 'content': user}],
-        }, read_timeout=90)
+        }
+        # This Qwen gateway can return only a nested member in JSON mode.
+        if not (model.lower().startswith('qwen')
+                and urlsplit(self.settings.llm_base_url).hostname == 'maas-api.simple-server.cn'):
+            request['response_format'] = {'type': 'json_object'}
+        body = self._post('/chat/completions', request, read_timeout=90)
         try:
-            content = json.loads(body['choices'][0]['message']['content'])
+            content = decode_model_json(body['choices'][0]['message']['content'])
         except (KeyError, IndexError, TypeError, ValueError):
             raise ProviderError('deepseek_invalid_model_output') from None
-        # Some compatible gateways wrap the requested object in a singleton array.
-        if isinstance(content, list) and len(content) == 1 and isinstance(content[0], dict):
-            content = content[0]
-        # Some gateways serialize the response-format descriptor around the actual object.
-        if (isinstance(content, dict) and set(content) == {'type', 'content'}
-                and content['type'] == 'json_object' and isinstance(content['content'], dict)):
-            content = content['content']
-        if not isinstance(content, dict):
+        for _ in range(3):
+            if isinstance(content, list) and len(content) == 1 and isinstance(content[0], dict):
+                content = content[0]
+            elif (isinstance(content, dict) and set(content) == {'type', 'content'}
+                  and content['type'] == 'json_object' and isinstance(content['content'], dict)):
+                content = content['content']
+            elif isinstance(content, dict) and set(content) == {'text'}:
+                try:
+                    decoded = decode_model_json(content['text'])
+                except (TypeError, ValueError):
+                    break
+                if not isinstance(decoded, (dict, list)):
+                    break
+                content = decoded
+            else:
+                break
+        object_list = (allow_object_list and isinstance(content, list) and bool(content)
+                       and all(isinstance(item, dict) for item in content))
+        if not isinstance(content, dict) and not object_list:
             raise ProviderError('deepseek_invalid_model_output')
         usage = body.get('usage')
         return {'output': content, 'usage': usage if isinstance(usage, dict) else {},
