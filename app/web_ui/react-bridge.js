@@ -2,6 +2,7 @@
 // Explicit adapter for the React views. Legacy scripts stay usable by their original tests.
 (() => {
   Object.assign(titles,{
+    "my-assistant":"我的助手",
     "my-overview":"我的工作台", "orders-payments":"订单与收款", "protection-funding":"保障与资金", "ai-capabilities":"AI能力",
     overview:"业务概况",discover:"发现客户",directory:"企业与联系人",sources:"商业情报",company:"企业资料",
   });
@@ -103,6 +104,28 @@
           summary:window.__vokenWorkbenchSummary || null}, workbenchError, loading:loading>0};
     },
     navigate(tab) { return perform(async()=> { if(tab==="jobs") state.selectedJob=null; await switchTab(tab); }); },
+    assistant: {
+      list() { return api(root()+"/assistant/conversations"); },
+      history(id, before) {
+        const query = before ? "?" + new URLSearchParams({before}) : "";
+        return api(root()+"/assistant/conversations/"+encodeURIComponent(id)+"/messages"+query);
+      },
+      get(id) { return api(root()+"/assistant/messages/"+encodeURIComponent(id)); },
+      send(body, key) {
+        return api(root()+"/assistant/messages", {
+          method:"POST", headers:{"Idempotency-Key":key}, body:JSON.stringify(body),
+        });
+      },
+      async decide(id, approve, file) {
+        const form = new FormData();
+        form.append("approve", String(approve));
+        if (file) form.append("file", file);
+        const result = await api(root()+"/assistant/messages/"+encodeURIComponent(id)+"/decision", {method:"POST", body:form});
+        if (approve && result.status === "succeeded") await loadGlobal().catch(() => {});
+        return result;
+      },
+      download(query) { return perform(() => exportProspects(new URLSearchParams(query))); },
+    },
     refresh() { return perform(async()=> { await loadGlobal(); await refreshTab(); }); },
     filter(values, offset=0) {
       const form=$("#wb-filter");

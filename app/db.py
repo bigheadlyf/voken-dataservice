@@ -194,6 +194,23 @@ class AgentTurn(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+class AssistantTurn(Base):
+    __tablename__ = 'assistant_turns'
+    __table_args__ = (
+        UniqueConstraint('workspace_id', 'idempotency_key'),
+        Index('ix_assistant_turns_conversation', 'workspace_id', 'conversation_id', 'created_at', 'id'),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey('workspaces.id'))
+    conversation_id: Mapped[str] = mapped_column(String(32))
+    idempotency_key: Mapped[str] = mapped_column(String(64))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), default='running')
+    content: Mapped[str] = mapped_column(Text)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class AgentMemory(Base):
     __tablename__ = 'agent_memories'
     __table_args__ = (ForeignKeyConstraint(['workspace_id', 'agent_id'], ['agents.workspace_id', 'agents.id']),)

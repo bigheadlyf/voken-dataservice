@@ -23,6 +23,48 @@ export interface Snapshot {
   workbenchError: string;
   loading: boolean;
 }
+export type AssistantAttachment = { name: string; size: number };
+export type AssistantInput = {
+  content: string;
+  conversation_id?: string;
+  attachment?: AssistantAttachment;
+};
+export type AssistantProposal = {
+  label: string;
+  operation: string;
+  path: RecordData;
+  query: RecordData;
+  body: RecordData | null;
+  authorizations: string[];
+  point_quote?: { total_points: number; data_points: number };
+  attachment?: AssistantAttachment;
+  mail?: { sender: string | null; footer: string | null };
+};
+export type AssistantResult = {
+  operation: string;
+  label: string;
+  path: RecordData;
+  status: "succeeded" | "failed" | "ready";
+  business_status?: string;
+  error?: unknown;
+  http_status?: number;
+  result?: unknown;
+  job?: { id: string; status: string; operation: string };
+  download_query?: Record<string, string>;
+  qr_data_url?: string;
+};
+export type AssistantTurn = {
+  id: string;
+  conversation_id: string;
+  status: "running" | "pending" | "executing" | "succeeded" | "failed" | "cancelled";
+  content: string;
+  response: string | null;
+  calls: AssistantResult[];
+  proposal: AssistantProposal | null;
+  attachment: AssistantAttachment | null;
+  error: string | null;
+};
+export type AssistantConversation = { id: string; title: string };
 export interface Bridge {
   snapshot(): Snapshot;
   navigate(tab: string): Promise<void>;
@@ -44,6 +86,14 @@ export interface Bridge {
   action(fn: () => Promise<unknown>): Promise<void>;
   saveView(name: string): Promise<void>;
   applyView(index: number): Promise<void>;
+  assistant: {
+    list(): Promise<AssistantConversation[]>;
+    history(id: string, before?: string): Promise<{ turns: AssistantTurn[]; has_more: boolean }>;
+    get(id: string): Promise<AssistantTurn>;
+    send(body: AssistantInput, key: string): Promise<AssistantTurn>;
+    decide(id: string, approve: boolean, file?: File): Promise<AssistantTurn>;
+    download(query: Record<string, string>): Promise<void>;
+  };
 }
 declare global {
   interface Window {

@@ -39,6 +39,7 @@ import {
   AppstoreOutlined,
   ArrowRightOutlined,
   BankOutlined,
+  CommentOutlined,
   CheckCircleOutlined,
   CreditCardOutlined,
   ClockCircleOutlined,
@@ -76,6 +77,7 @@ import { CustomerContactSearch, type ContactSearch } from "./CustomerContactSear
 import { BusinessPages } from "./BusinessPages";
 import { InsuranceAssessment } from "./InsuranceAssessment";
 import { HelpHint } from "./HelpHint";
+import { MyAssistant } from "./MyAssistant";
 import {
   FILTER_DEFAULTS,
   filterChips,
@@ -115,6 +117,7 @@ const verification: Record<string, string> = {
   unverified: "尚未独立验证",
 };
 const titles: Record<string, string> = {
+  "my-assistant": "我的助手",
   "my-overview": "我的工作台",
   "orders-payments": "订单与收款",
   "protection-funding": "保障与资金",
@@ -1764,6 +1767,7 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
   );
 }
 const workspaceSections = [
+  { key: "my-assistant", label: titles["my-assistant"], icon: <CommentOutlined /> },
   { key: "my-overview", label: titles["my-overview"], icon: <DashboardOutlined /> },
   {
     key: "customers-opportunities",
@@ -1846,9 +1850,10 @@ function Workspace() {
   const section =
     workspaceSections.find(
       ({ key }) => key === tab || (tab === "costs" && key === "my-overview"),
-    ) ?? workspaceSections[1];
+    ) ?? workspaceSections.find(({ key }) => key === "customers-opportunities")!;
   const showCustomerMenu = section.key === "customers-opportunities";
   const showSectionHome = [
+    "my-assistant",
     "my-overview",
     "orders-payments",
     "protection-funding",
@@ -2054,6 +2059,9 @@ function Workspace() {
               </div>
               {bridge && data?.session && (
                 <div key={data.session?.workspace_id || "signed-out"}>
+                  {tab === "my-assistant" && (
+                    <MyAssistant workspace={data.session.workspace_id} bridge={bridge} />
+                  )}
                   <BusinessPages data={data} bridge={bridge} />
                   {tab === "ai-capabilities" && <AICapabilities bridge={bridge} />}
                   {tab === "overview" && (

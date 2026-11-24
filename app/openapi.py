@@ -351,7 +351,10 @@ def install_openapi(application, *, routers=()):
             for operation in methods.values():
                 for media, content in operation.get('requestBody', {}).get('content', {}).items():
                     if media == 'multipart/form-data':
-                        content['examples'] = {'upload': {'value': {'file': '(企业介绍.pdf 的二进制内容)'}}}
+                        if path.endswith('/assistant/messages/{turn_id}/decision'):
+                            content['examples'] = {'approve': {'value': {'approve': True}}}
+                        else:
+                            content['examples'] = {'upload': {'value': {'file': '(企业介绍.pdf 的二进制内容)'}}}
                     else:
                         reference = content.get('schema', {}).get('$ref', '').rsplit('/', 1)[-1]
                         examples = components.get(reference, {}).get('examples', [])

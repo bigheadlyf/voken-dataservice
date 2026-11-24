@@ -1,0 +1,222 @@
+.assistant-shell {
+  display: grid;
+  grid-template-rows: auto minmax(220px, 1fr) auto;
+  width: min(100%, 1000px);
+  min-height: 510px;
+  height: calc(100dvh - 180px);
+  margin: 0 auto 26px;
+  overflow: hidden;
+  border: 1px solid #e0e9f6;
+  border-radius: 16px;
+  background: #fff;
+}
+.assistant-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #edf1f7;
+  padding: 13px 22px;
+}
+.assistant-toolbar .ant-select {
+  width: min(320px, 67%);
+}
+.assistant-log {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px clamp(14px, 4vw, 44px);
+}
+.assistant-welcome {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 100%;
+  text-align: center;
+}
+.assistant-welcome .ant-avatar,
+.assistant-answer > .ant-avatar {
+  background: #edf3ff;
+  color: var(--brand-blue);
+  flex: none;
+}
+.assistant-welcome h2 {
+  margin: 14px 0 4px;
+  color: var(--brand-ink);
+  font-size: clamp(20px, 3vw, 28px);
+}
+.assistant-welcome p {
+  margin: 0 0 22px;
+  color: var(--brand-muted);
+}
+.assistant-suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 520px);
+}
+.assistant-suggestions .ant-btn {
+  justify-content: start;
+  min-height: 40px;
+  height: auto;
+  padding-block: 6px;
+  text-align: left;
+  white-space: normal;
+}
+.assistant-older {
+  display: block;
+  margin-inline: auto;
+}
+.assistant-turn {
+  display: grid;
+  gap: 13px;
+  margin-bottom: 22px;
+}
+.assistant-user-message {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  justify-self: end;
+  max-width: 87%;
+  padding: 10px 15px;
+  border-radius: 13px 13px 4px 13px;
+  background: #edf3ff;
+  color: var(--brand-ink);
+}
+.assistant-user-message .ant-tag,
+.assistant-composer .ant-tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.assistant-message-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+.assistant-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.assistant-answer-content {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 10px;
+  padding-top: 3px;
+}
+.assistant-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-muted);
+}
+.assistant-result,
+.assistant-approval {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e0e9f6;
+  border-radius: 10px;
+  background: #f9fbfe;
+  padding: 12px 14px;
+  overflow-wrap: anywhere;
+}
+.assistant-result-heading,
+.assistant-result-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.assistant-result-actions:empty {
+  display: none;
+}
+.assistant-result-heading span:first-child {
+  font-weight: 600;
+}
+.assistant-result summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--brand-blue);
+}
+.assistant-result pre {
+  max-height: 270px;
+  margin: 8px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-result-error {
+  margin: 0;
+  color: #a52727;
+}
+.assistant-payment-qr {
+  display: block;
+  width: min(200px, 100%);
+}
+.assistant-approval {
+  border-color: #b9cef4;
+  background: #f6f9ff;
+}
+.assistant-approval p,
+.assistant-approval dl {
+  margin: 0;
+}
+.assistant-approval code {
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+.assistant-approval dl > div {
+  display: grid;
+  grid-template-columns: minmax(78px, 105px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #e0e9f6;
+}
+.assistant-approval dt {
+  color: var(--brand-muted);
+}
+.assistant-approval dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.assistant-composer {
+  display: grid;
+  gap: 8px;
+  padding: 4px clamp(14px, 4vw, 44px) 20px;
+}
+.assistant-composer form {
+  border: 1px solid #cddcf4;
+  border-radius: 14px;
+  padding: 9px;
+}
+.assistant-composer form:focus-within {
+  border-color: var(--brand-blue);
+}
+.assistant-composer textarea {
+  padding: 5px 8px;
+  resize: none;
+}
+.assistant-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+@media (max-width: 650px) {
+  .assistant-shell {
+    min-height: 490px;
+    height: calc(100dvh - 157px);
+  }
+  .assistant-toolbar {
+    padding-inline: 12px;
+  }
+  .assistant-log {
+    padding-block: 15px;
+  }
+  .assistant-suggestions {
+    grid-template-columns: 1fr;
+  }
+  .assistant-composer {
+    padding-bottom: 12px;
+  }
+}

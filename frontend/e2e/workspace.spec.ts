@@ -49,6 +49,7 @@ test("top-level navigation keeps customer tools in their section on desktop and 
     exact: true,
   });
   await expect(primary.getByRole("button")).toHaveText([
+    "我的助手",
     "我的工作台",
     "客户与商机",
     "订单与收款",
@@ -92,6 +93,39 @@ test("top-level navigation keeps customer tools in their section on desktop and 
     .click();
   await expect(page).toHaveURL(/#discover$/);
   await expect(page.locator("#page-title")).toHaveText("发现客户");
+});
+
+test("personal assistant queries workspace data and confirms a real task submission", async ({ page }) => {
+  const desktop = page.getByRole("navigation", { name: "一级导航" });
+  await desktop.getByRole("button", { name: "我的助手", exact: true }).click();
+  await expect(page).toHaveURL(/#my-assistant$/);
+  const composer = page.getByRole("textbox", { name: "给助手发消息" });
+  await expect(composer).toBeEnabled();
+  await page.screenshot({ path: resolve(evidence, "assistant-desktop.png") });
+  await page.getByRole("button", { name: "查询已保存的企业和客户" }).click();
+  await expect(composer).toHaveValue("查询已保存的企业和客户");
+  await composer.press("Enter");
+  await expect(page.getByText(/查到 \d+ 家已保存企业/)).toBeVisible();
+  await composer.fill("用已有员工创建一条拓客任务");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  const approval = page.getByRole("region", { name: "待确认操作" });
+  await expect(approval.getByText(/预计预占/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开任务" })).toHaveCount(0);
+  await approval.getByRole("button", { name: "确认执行" }).click();
+  const openTask = page.getByRole("button", { name: "打开任务" });
+  await expect(openTask).toBeVisible();
+  await page.reload();
+  await expect(openTask).toBeVisible();
+  await openTask.click();
+  await expect(page).toHaveURL(/#jobs\/[a-f0-9]{32}$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "打开导航", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "工作空间导航" });
+  await drawer.getByRole("button", { name: "我的助手", exact: true }).click();
+  await expect(composer).toBeVisible();
+  await expect(page.getByRole("heading", { name: "我的助手", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: resolve(evidence, "assistant-mobile.png") });
 });
 
 test("help overlays stay in place on mouse hover, keyboard focus and touch", async ({ page, browser }) => {

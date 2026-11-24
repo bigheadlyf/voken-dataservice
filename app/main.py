@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import auth, billing, chat, company, company_intake, crm, customers, directory, discovery_planning, discovery_review, mail_delivery, payments, schedules, sources, workspaces
+from app import assistant, auth, billing, chat, company, company_intake, crm, customers, directory, discovery_planning, discovery_review, mail_delivery, payments, schedules, sources, workspaces
 from app.config import Settings
 from app.db import AgentTurn, create_session_factory, write_transaction
 from sqlalchemy import update
@@ -51,6 +51,7 @@ def create_app(
                 with write_transaction(sessions) as session:
                     session.execute(update(AgentTurn).where(AgentTurn.status == 'running').values(
                         status='failed', error='agent_chat_interrupted'))
+                    assistant.recover(session)
             if sessions is not None and run_worker:
                 upstream = upstream or DeepSeek(settings)
                 if trade_provider is None and settings.upkuajing_api_key:
@@ -104,6 +105,7 @@ def create_app(
     application.include_router(auth.router)
     application.include_router(workspaces.router)
     application.include_router(chat.router)
+    application.include_router(assistant.router)
     application.include_router(discovery_planning.router)
     application.include_router(discovery_review.router)
     application.include_router(directory.router)

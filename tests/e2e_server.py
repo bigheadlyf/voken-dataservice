@@ -17,6 +17,21 @@ from test_service import FixtureDeepSeek
 
 class UIModel(FixtureDeepSeek):
     def complete(self, prompt, payload, max_tokens, scenario=None):
+        if 'catalog' in payload:
+            observations = payload['observations']
+            content = payload['content']
+            if '创建' in content:
+                if observations:
+                    agent = observations[-1]['result'][0]
+                    output = {'tool_call': {'operation': 'POST /agents/{agent_id}/runs', 'path': {'agent_id': agent['id']}}}
+                else:
+                    output = {'tool_call': {'operation': 'GET /agents'}}
+            elif observations:
+                total = observations[-1]['result']['summary']['companies']
+                output = {'reply': f'查到 {total} 家已保存企业。'}
+            else:
+                output = {'tool_call': {'operation': 'GET /crm/workbench', 'query': {'limit': 1}}}
+            return {'output': output}
         if 'prospect' in payload and 'objective' in payload:
             return {'output': {'subject': 'LED introduction — acceptance test',
                 'body': 'Hello, we supply LED products. Would you like to review our product range? Please reply if you prefer not to hear from us.',

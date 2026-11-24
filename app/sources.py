@@ -35,6 +35,12 @@ def list_sources(request: Request, workspace: ws.WorkspaceAccess):
     return catalog(request.app.state.settings)
 
 
+def search_operation(settings, source_id):
+    web_fallback = (source_id == 'companies_house' and not settings.companies_house_api_key
+                    and settings.llm_api_key and settings.tools_api_key)
+    return 'source_lookup' if source_id in DIRECT_SOURCES and not web_fallback else 'public_search'
+
+
 @router.post('/searches', status_code=202, response_model=JobResponse)
 def search_source(body: SourceQuery, request: Request, workspace: ws.WorkspaceAccess,
                   sessions: ws.Sessions, idempotency_key: ws.IdempotencyKey):
@@ -57,9 +63,7 @@ def search_source(body: SourceQuery, request: Request, workspace: ws.WorkspaceAc
         raise HTTPException(422, 'open_source_country_not_supported')
     settings = request.app.state.settings
     identity = body.model_dump()
-    company_web_fallback = (source_id == 'companies_house' and not settings.companies_house_api_key
-                            and settings.llm_api_key and settings.tools_api_key)
-    operation = 'source_lookup' if source_id in DIRECT_SOURCES and not company_web_fallback else 'public_search'
+    operation = search_operation(settings, source_id)
     fingerprint = ws.request_fingerprint(operation, identity)
     with write_transaction(sessions) as session:
         ws.lock_workspace(session, workspace)
@@ -68,10 +72,10 @@ def search_source(body: SourceQuery, request: Request, workspace: ws.WorkspaceAc
             return ws.job_view(previous)
         if source_id in DIRECT_SOURCES and settings.public_source_daily_call_limit == 0:
             raise HTTPException(503, 'open_sources_disabled')
-        if source_id == 'companies_house' and not settings.companies_house_api_key and not company_web_fallback:
+        if source_id == 'companies_house' and not settings.companies_house_api_key and operation == 'source_lookup':
             raise HTTPException(503, 'open_source_not_configured')
-        if source_id in SITE_SOURCES or company_web_fallback:
-            domains = ['find-and-update.company-information.service.gov.uk'] if company_web_fallback else SITE_SOURCES[source_id][2]
+        if operation == 'public_search':
+            domains = ['find-and-update.company-information.service.gov.uk'] if source_id == 'companies_house' else SITE_SOURCES[source_id][2]
             identity = {**identity, 'source_domains': domains,
                 'instructions': f'在指定官方站点查找与 {body.query} 相关的公开情报。'
                     f'目标国家：{body.country or "不限"}。区分采购公告、历史结果和一般资料，不能把登记信息认作采购意向。'}
