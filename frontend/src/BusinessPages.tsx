@@ -21,7 +21,7 @@ function DashboardMetric({ label, value, icon, note, demo, onClick }: {
   label: string;
   value?: number;
   icon: ReactNode;
-  note: string;
+  note?: string;
   demo?: boolean;
   onClick: () => void;
 }) {
@@ -36,7 +36,7 @@ function DashboardMetric({ label, value, icon, note, demo, onClick }: {
         {demo && <small>USD</small>}
         {value?.toLocaleString("zh-CN") ?? "—"}
       </span>
-      <span className="business-tile-note">{note}</span>
+      {note && <span className="business-tile-note">{note}</span>}
     </button>
   );
 }
@@ -74,11 +74,11 @@ function Dashboard({ data, totals, navigate }: {
         <h2 className="business-heading" id="workbench-data">业务数据</h2>
         <div className="business-grid business-metrics">
           <DashboardMetric label="洽谈中商机" value={data.summary ? data.summary.stages?.negotiating ?? 0 : undefined}
-            note="客户管线中的洽谈阶段" icon={<AimOutlined />} onClick={() => navigate("overview")} />
+            icon={<AimOutlined />} onClick={() => navigate("overview")} />
           <DashboardMetric label="已保存客户" value={data.summary?.total}
-            note="当前工作空间" icon={<TeamOutlined />} onClick={() => navigate("customers")} />
+            icon={<TeamOutlined />} onClick={() => navigate("customers")} />
           <DashboardMetric label="到期待跟进" value={data.summary?.due_followups}
-            note="到期且允许联系" icon={<ClockCircleOutlined />} onClick={() => navigate("overview")} />
+            icon={<ClockCircleOutlined />} onClick={() => navigate("overview")} />
           <DashboardMetric label="累计回款" value={totals.received} note={`${totals.unpaid} 笔样例订单待回款`}
             icon={<WalletOutlined />} demo onClick={() => navigate("orders-payments")} />
         </div>
@@ -86,9 +86,8 @@ function Dashboard({ data, totals, navigate }: {
       <section aria-labelledby="workbench-employees">
         <h2 className="business-heading" id="workbench-employees">数字员工</h2>
         <Card className="business-employees" variant="outlined">
-          <h3>已创建的员工</h3>
           {data.dashboardAgentsError ? (
-            <Alert type="warning" showIcon title="数字员工加载失败，请刷新数据重试。" />
+            <Alert type="warning" showIcon title="加载失败，请刷新" />
           ) : data.dashboardAgents === null ? (
             <Skeleton active title={false} paragraph={{ rows: 1 }} />
           ) : data.dashboardAgents.length ? (
@@ -100,15 +99,15 @@ function Dashboard({ data, totals, navigate }: {
             </div>
           ) : (
             <div className="employee-empty">
-              <span>当前工作空间尚未创建拓客数字员工。</span>
-              <Button type="link" onClick={() => navigate("discover")}>前往发现客户</Button>
+              <span>暂无拓客员工</span>
+              <Button type="link" onClick={() => navigate("discover")}>发现客户</Button>
             </div>
           )}
           <h3>演示员工</h3>
           <div className="business-grid employee-grid">
-            <Employee name="收款跟进员" detail="准备收款提醒，协助核对回款流水" icon={<CreditCardOutlined />}
+            <Employee name="收款跟进员" detail="提醒与对账" icon={<CreditCardOutlined />}
               demo onClick={() => navigate("orders-payments")} />
-            <Employee name="保险分析师" detail="梳理货运与经营保障需求" icon={<SafetyCertificateOutlined />}
+            <Employee name="保险分析师" detail="保障需求" icon={<SafetyCertificateOutlined />}
               demo onClick={() => navigate("protection-funding")} />
           </div>
         </Card>
@@ -126,7 +125,7 @@ function Dashboard({ data, totals, navigate }: {
         </div>
       </section>
       <Modal open={!!employee} title={employee?.config.name} onCancel={() => setEmployeeId(null)}
-        footer={<Button type="primary" onClick={() => { setEmployeeId(null); navigate("discover"); }}>进入拓客</Button>}>
+        footer={<Button type="primary" onClick={() => { setEmployeeId(null); navigate("discover"); }}>发现客户</Button>}>
         {employee && <EmployeeDetails employee={employee} />}
       </Modal>
     </div>

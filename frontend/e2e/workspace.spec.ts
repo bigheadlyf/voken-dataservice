@@ -94,6 +94,62 @@ test("top-level navigation keeps customer tools in their section on desktop and 
   await expect(page.locator("#page-title")).toHaveText("发现客户");
 });
 
+test("page help stays out of the way and opens on desktop and mobile", async ({ page }) => {
+  const metricsHelp = page.getByRole("button", { name: "客户数据口径", exact: true });
+  await expect(metricsHelp).toHaveAttribute("aria-expanded", "false");
+  await metricsHelp.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/邮箱按地址去重/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(metricsHelp).toHaveAttribute("aria-expanded", "false");
+
+  await page.getByRole("menuitem", { name: "thunderbolt 发现客户", exact: true }).click();
+  const guidance = page.locator("#discover .copy-help").filter({
+    has: page.getByLabel("找客说明", { exact: true }),
+  });
+  const trigger = guidance.locator("summary");
+  const explanation = guidance.locator(".copy-help-content");
+  await expect(page.getByRole("heading", { name: "找客条件", exact: true })).toBeVisible();
+  await expect(page.getByText("任务创建小贴士", { exact: true })).toHaveCount(0);
+  await expect(explanation).toBeHidden();
+  await trigger.click();
+  await expect(explanation).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(explanation).toBeHidden();
+  await page.screenshot({ path: resolve(evidence, "discovery-copy-desktop.png") });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await trigger.click();
+  await expect(explanation).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: resolve(evidence, "discovery-help-mobile.png") });
+  await page.getByRole("heading", { name: "发现客户", exact: true }).click();
+  await expect(explanation).toBeHidden();
+
+  await page.route("**/discovery/plan", (route) => route.fulfill({
+    json: {
+      reply: "已整理美国 LED 客户方案。",
+      configuration: {
+        name: "美国 LED", market: "美国", product: "LED",
+        instructions: "查找 LED 买家", target_count: 10, buyer_role: "any",
+      },
+    },
+  }));
+  const guidedForm = page.locator("#discovery-guided-form");
+  await guidedForm.getByLabel("产品", { exact: true }).fill("LED");
+  await guidedForm.getByLabel("目标市场", { exact: true }).fill("美国");
+  await guidedForm.getByRole("button", { name: "生成方案", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "任务方案", exact: true })).toBeVisible();
+  const transcript = page.locator("#discovery-transcript");
+  await expect(transcript.getByText("已整理美国 LED 客户方案。")).toBeHidden();
+  await transcript.getByText("对话记录", { exact: true }).click();
+  await expect(transcript.getByText("已整理美国 LED 客户方案。")).toBeVisible();
+
+  await page.goto("/app?legacy=true#discover");
+  await expect(page.getByRole("heading", { name: "找客条件", exact: true })).toBeVisible();
+  await page.locator('#discover summary[aria-label="找客说明"]').click();
+  await expect(page.getByText(/确认方案前不会创建任务/)).toBeVisible();
+});
+
 test("personal workbench connects live CRM and employees to the shared transaction demo", async ({ page }) => {
   await page.goto("/app");
   const data = page.getByRole("region", { name: "业务数据" });
@@ -378,7 +434,7 @@ test("basic discovery runs through the real queue and renders results", async ({
   await page
     .getByRole("menuitem", { name: "thunderbolt 发现客户", exact: true })
     .click();
-  await page.getByRole("tab", { name: "自行填写表单", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
   const form = page.locator("#discovery-form");
   await expect(form.locator("[name=name]")).toBeHidden();
   await expect(form.locator("[name=contact_target]")).toBeHidden();
@@ -463,7 +519,7 @@ test("mobile navigation, drawer and logout keep data isolated between accounts",
   await expect(page.locator("#auth")).toBeHidden();
   await page.getByRole("button", { name: "打开导航", exact: true }).click();
   await page.getByRole("button", { name: "我的工作台", exact: true }).click();
-  await expect(page.getByText("当前工作空间尚未创建拓客数字员工。", { exact: true })).toBeVisible();
+  await expect(page.getByText("暂无拓客员工", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /验收用马来西亚拓客员/ })).toHaveCount(0);
   await page.getByRole("button", { name: "打开导航", exact: true }).click();
   await page.getByRole("button", { name: "客户与商机", exact: true }).click();

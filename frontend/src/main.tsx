@@ -74,6 +74,7 @@ import { WorkbenchActionModal, type WorkbenchAction } from "./WorkbenchAction";
 import { CustomerActionModal, type CustomerAction } from "./CustomerAction";
 import { CustomerContactSearch, type ContactSearch } from "./CustomerContactSearch";
 import { BusinessPages } from "./BusinessPages";
+import { HelpHint } from "./HelpHint";
 import {
   FILTER_DEFAULTS,
   filterChips,
@@ -127,18 +128,6 @@ const titles: Record<string, string> = {
   mail: "邮件管理",
   company: "企业资料",
   costs: "用量与费用",
-};
-const descriptions: Record<string, string> = {
-  "my-overview": "查看业务进展、数字员工和常用功能。",
-  overview: "从发现到跟进，让每一条客户线索都有下一步。",
-  workbench: "筛选企业、核对联系人，集中推进值得跟进的商机。",
-  discover: "从产品与市场出发，找到下一批合适的潜在客户。",
-  jobs: "查看执行进度、核对来源，管理每一次发现。",
-  directory: "查询企业与目标岗位，按需补充商务联系信息。",
-  sources: "核对企业背景，发现公开采购与市场信号。",
-  company: "让 AI 理解你的企业、产品与目标市场。",
-  mail: "审阅开发信，记录回复，安排下一次跟进。",
-  costs: "查看点数、任务结算和数据使用情况。",
 };
 const options = (mapping: Record<string, string>) =>
   Object.entries(mapping).map(([value, label]) => ({ value, label }));
@@ -207,21 +196,11 @@ function Auth({ ready }: { ready: boolean }) {
     >
       <div className="auth-intro">
         <Brand />
-        <div className="auth-intro-copy">
-          <p className="auth-kicker">微元 Voken 工作台</p>
-          <h1>
-            用<span className="brand-highlight"> AI </span>发现客户，
-            <br />
-            推进每一次<span className="brand-accent">商机</span>。
-          </h1>
-          <p className="auth-lead">
-            核对企业和联系信息、审阅开发信，并跟进客户进展。
-          </p>
-        </div>
+        <div className="auth-intro-copy"><h1>AI 客户开发工作台</h1></div>
       </div>
       <div className="auth-form-wrap">
         <div className="auth-form-card">
-          <Title level={2}>登录微元工作台</Title>
+          <Title level={2}>登录</Title>
           <form id="login-form" className="login-form" method="post">
             <label htmlFor="login-phone">手机号</label>
             <Input
@@ -229,7 +208,6 @@ function Auth({ ready }: { ready: boolean }) {
               name="phone"
               type="tel"
               autoComplete="username"
-              placeholder="请输入手机号"
               size="large"
               required
             />
@@ -238,7 +216,6 @@ function Auth({ ready }: { ready: boolean }) {
               id="login-password"
               name="password"
               autoComplete="current-password"
-              placeholder="请输入密码"
               size="large"
               minLength={8}
               required
@@ -266,7 +243,6 @@ function Metrics({
   items: {
     label: string;
     value?: number;
-    note: string;
     icon: React.ReactNode;
   }[];
 }) {
@@ -285,9 +261,6 @@ function Metrics({
                 item.value === undefined ? "—" : Number(value).toLocaleString()
               }
             />
-            <Text type="secondary" className="metric-note">
-              {item.note}
-            </Text>
           </Card>
         </Col>
       ))}
@@ -299,25 +272,21 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
   const steps = [
     {
       title: "完善企业资料",
-      text: "告诉 AI 你的产品、优势与市场",
       tab: "company",
       icon: <BankOutlined />,
     },
     {
       title: "发现潜在客户",
-      text: "描述目标，创建小批量找客任务",
       tab: "discover",
       icon: <SearchOutlined />,
     },
     {
       title: "筛选并核对",
-      text: "检查企业匹配、岗位和邮箱",
       tab: "workbench",
       icon: <FilterOutlined />,
     },
     {
       title: "开始商务对话",
-      text: "审阅开发信，记录每一次推进",
       tab: "mail",
       icon: <MailOutlined />,
     },
@@ -326,10 +295,6 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
     <div className="native-page">
       <div className="overview-hero">
         <div>
-          <h2>
-            发现客户，<span className="brand-highlight">推进商机</span>
-          </h2>
-          <p>按目标市场和产品找客户，核对来源后加入客户档案。</p>
           <Space wrap>
             <Button
               type="primary"
@@ -349,32 +314,28 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
           {
             label: "已保存客户",
             value: summary?.total,
-            note: "你的独立客户管线",
             icon: <TeamOutlined />,
           },
           {
             label: "到期待跟进",
             value: summary?.due_followups,
-            note: "到期且允许联系的客户",
             icon: <ClockCircleOutlined />,
           },
           {
             label: "正在洽谈",
             value: summary?.stages?.negotiating || (summary ? 0 : undefined),
-            note: "持续推进中的商机",
             icon: <ContactsOutlined />,
           },
           {
             label: "已成交",
             value: summary?.stages?.won || (summary ? 0 : undefined),
-            note: "以实际记录为准",
             icon: <CheckCircleOutlined />,
           },
         ]}
       />
       <Row gutter={[20, 20]}>
         <Col xs={24} lg={15}>
-          <Card title="今天值得推进的事">
+          <Card title="待跟进">
             <div className="next-action">
               <span className="action-icon">
                 <ClockCircleOutlined />
@@ -383,15 +344,10 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
                 <Title level={4}>
                   {summary
                     ? summary.due_followups
-                      ? `${summary.due_followups} 位客户等待下一次跟进`
-                      : "开始建立你的下一批商机"
+                      ? `${summary.due_followups} 位客户待跟进`
+                      : "暂无到期客户"
                     : "正在加载业务概况"}
                 </Title>
-                <Paragraph type="secondary">
-                  {summary?.due_followups
-                    ? "先核对客户来源和沟通历史，再决定下一次联系。"
-                    : "完善企业资料，创建找客任务，筛选值得对话的企业。"}
-                </Paragraph>
                 <Button
                   type="primary"
                   onClick={() =>
@@ -406,18 +362,17 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
                 </Button>
               </div>
             </div>
-            <div className="overview-note">
-              <CheckCircleOutlined />{" "}
-              {summary
-                ? `已停止联系 ${summary.do_not_contact || 0} 位客户；回复和成交数据以实际记录为准。`
-                : "统计仅展示当前工作空间的数据。"}
-            </div>
+            {summary && (
+              <div className="overview-note">
+                <CheckCircleOutlined /> 已停止联系 {summary.do_not_contact || 0} 位客户
+              </div>
+            )}
           </Card>
         </Col>
         <Col xs={24} lg={9}>
-          <Card title="清晰的客户开发路径">
+          <Card title="常用操作">
             <div className="workflow-list">
-              {steps.map((step, i) => (
+              {steps.map((step) => (
                 <button
                   key={step.tab}
                   onClick={() => ignore(bridge.navigate(step.tab))}
@@ -425,7 +380,6 @@ function Overview({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
                   <span className="workflow-icon">{step.icon}</span>
                   <span>
                     <b>{step.title}</b>
-                    <small>{step.text}</small>
                   </span>
                   <ArrowRightOutlined />
                 </button>
@@ -501,7 +455,9 @@ function ContactCard({
         验证时间：{date(contact.verification?.checked_at)} ·{" "}
         {contact.verification?.history_count || 0} 次历史记录
       </Paragraph>
-      <Text type="secondary">供应商标记不替代独立验证，不保证送达。</Text>
+      <HelpHint label="邮箱验证说明">
+        供应商标记与独立验证分别记录。独立验证有效也无法保证送达。
+      </HelpHint>
       {contact.warnings?.length > 0 && (
         <Alert
           type="warning"
@@ -745,7 +701,11 @@ function CustomerDrawer({
                     />
                     <Card
                       size="small"
-                      title="判断依据"
+                      title={<div className="help-heading">判断依据
+                        <HelpHint label="来源与证据说明">
+                          企业匹配、岗位匹配和邮箱有效性分别核对。历史记录仅作参考。
+                        </HelpHint>
+                      </div>}
                       className="drawer-evidence"
                     >
                       <Paragraph>
@@ -768,15 +728,11 @@ function CustomerDrawer({
                           description="采用前请核对采购主体、公告期限和联系用途。"
                           action={<Button loading={applyingSource} onClick={() => void applySource()}>已核对，采用公告邮箱</Button>} />
                       )}
-                      <Alert
-                        type="info"
-                        title="企业匹配、岗位匹配与邮箱有效性分别判断；历史信息不代表当前采购需求。"
-                      />
                     </Card>
                     {data.duplicates?.length > 0 && (
                       <Card
                         size="small"
-                        title="疑似关联 / 重复档案（尚未合并）"
+                        title="疑似重复客户"
                         className="drawer-evidence"
                       >
                         {data.duplicates.map((duplicate: RecordData) => (
@@ -790,7 +746,7 @@ function CustomerDrawer({
                                 ignore(bridge.openCustomer(duplicate.id))
                               }
                             >
-                              打开档案核对
+                              查看客户
                             </Button>
                           </Paragraph>
                         ))}
@@ -1150,34 +1106,32 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
           {
             label: "企业档案",
             value: summary?.companies,
-            note: "当前工作空间独立档案",
             icon: <BankOutlined />,
           },
           {
             label: "有完整邮箱的企业",
             value: summary?.companies_with_email,
-            note: "联系信息仍需核实",
             icon: <MailOutlined />,
           },
           {
             label: "去重邮箱",
             value: summary?.unique_mailboxes,
-            note: "按邮箱去重统计",
             icon: <ContactsOutlined />,
           },
           {
             label: "近期验证有效",
             value: summary?.verified_mailboxes,
-            note: "独立验证，不保证送达",
             icon: <CheckCircleOutlined />,
           },
         ]}
       />
       <Card className="workbench-card">
         <div className="table-heading">
-          <div>
+          <div className="help-heading">
             <Title level={4}>客户资源</Title>
-            <Text type="secondary">企业、岗位与邮箱，分开核对，集中推进。</Text>
+            <HelpHint label="客户数据口径">
+              企业、岗位和邮箱分别核对。邮箱按地址去重，近期验证有效的邮箱仍需核对。疑似重复客户会保留为独立档案。
+            </HelpHint>
           </div>
           <Space wrap>
             <Tooltip title="按公司名、销售阶段和到期跟进条件导出">
@@ -1461,7 +1415,7 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
             </Text>
             {wb.lastLoadedAt && (
               <Text type="secondary" className="last-updated">
-                更新于{" "}
+                更新{" "}
                 {new Date(wb.lastLoadedAt).toLocaleTimeString("zh-CN", {
                   hour12: false,
                 })}
@@ -1527,7 +1481,7 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
         </div>
         {!screens.md && (
           <div className="table-scroll-hint">
-            左右滑动表格查看更多字段，点击名称打开详情。
+            左右滑动查看更多
           </div>
         )}
         <Table<RecordData>
@@ -1600,14 +1554,9 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
             pageSize: 30,
             total: wb.total || 0,
             showSizeChanger: false,
-            showTotal: (total) => `共 ${total} 条`,
             onChange: (page) => ignore(bridge.filter(applied, (page - 1) * 30)),
           }}
         />
-        <div className="table-footnote">
-          <CheckCircleOutlined />{" "}
-          企业匹配、岗位匹配与邮箱验证分别判断；疑似重复档案尚未合并。
-        </div>
       </Card>
       {action && (
         <WorkbenchActionModal
@@ -1641,9 +1590,6 @@ function Workbench({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
         okButtonProps={{ disabled: !viewName.trim() || dirty }}
         okText="保存视图"
       >
-        <Paragraph type="secondary">
-          保存已应用到列表的筛选条件，便于下次快速打开。
-        </Paragraph>
         <Input
           aria-label="筛选视图名称"
           autoFocus
@@ -1691,7 +1637,11 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
   return (
     <div className="native-page">
       <Card
-        title="任务记录"
+        title={<div className="help-heading">任务记录
+          <HelpHint label="任务状态说明">
+            执行中的任务每 5 秒更新。部分完成表示已有结果，详情页会列出缺失内容。
+          </HelpHint>
+        </div>}
         extra={
           <Button
             type="primary"
@@ -1719,7 +1669,7 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
             onChange={setStatus}
           />
           <Text type="secondary">
-            最近 {data.jobs.length} 个任务中，显示 {rows.length} 个
+            {rows.length} 个任务
           </Text>
         </div>
         <Table
@@ -1775,9 +1725,6 @@ function Tasks({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
           ]}
           locale={{ emptyText: <Empty description="暂无符合条件的任务" /> }}
         />
-        <Text type="secondary">
-          执行中的任务每 5 秒更新。部分完成的任务请查看已交付结果及缺失说明。
-        </Text>
       </Card>
     </div>
   );
@@ -1800,7 +1747,7 @@ const workspaceSections = [
 
 function AICapabilities({ bridge }: { bridge: Bridge }) {
   return (
-      <Card title="可用能力" className="section-home-card">
+      <Card className="section-home-card">
         <div className="workflow-list">
           <button
             type="button"
@@ -1811,7 +1758,6 @@ function AICapabilities({ bridge }: { bridge: Bridge }) {
             </span>
             <span>
               <b>AI 发现客户</b>
-              <small>根据产品和目标市场建立找客任务</small>
             </span>
             <ArrowRightOutlined />
           </button>
@@ -1821,7 +1767,6 @@ function AICapabilities({ bridge }: { bridge: Bridge }) {
             </span>
             <span>
               <b>AI 开发信</b>
-              <small>查看和审阅开发信草稿</small>
             </span>
             <ArrowRightOutlined />
           </button>
@@ -1875,11 +1820,6 @@ function Workspace() {
     "protection-funding",
     "ai-capabilities",
   ].includes(tab);
-  const description =
-    descriptions[tab] ||
-    (tab === "job-view"
-      ? "核对任务结果与来源，准备下一步业务行动。"
-      : undefined);
   const navigate = (key: string, closeDrawer = true) => {
     if (bridge && tab !== key) ignore(bridge.navigate(key));
     if (closeDrawer) setNavOpen(false);
@@ -2049,9 +1989,6 @@ function Workspace() {
                 />
               </Space>
               <Space>
-                <Tag className="workspace-tag" icon={<CheckCircleOutlined />}>
-                  独立业务空间
-                </Tag>
                 <Avatar size={32} className="user-avatar">
                   微
                 </Avatar>
@@ -2063,7 +2000,6 @@ function Workspace() {
                   <h1 id="page-title" tabIndex={-1}>
                     {titles[tab] || "业务概况"}
                   </h1>
-                  {description && <Text type="secondary">{description}</Text>}
                 </div>
                 <Space wrap className="page-header-actions">
                   {bridge && data?.customerId && ["directory", "job-view", "jobs"].includes(tab) && (
@@ -2107,10 +2043,6 @@ function Workspace() {
                 <button id="balance" />
                 <button id="logout" />
               </div>
-              <footer className="workspace-footer">
-                <span>微元 Voken · 让客户开发更进一步</span>
-                <span>公开信息优先，增强由你选择</span>
-              </footer>
             </main>
           </Layout>
         </Layout>

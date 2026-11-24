@@ -46,6 +46,7 @@ function resetAccountPanels() {
   accountWorkspace = state.session?.workspace_id || null;
   companyProposal = null;
   billingCatalog = null;
+  if ($("#billing-status")) $("#billing-status").hidden = true;
   for (const id of [
     "company-proposal",
     "company-candidates",
@@ -78,7 +79,7 @@ async function extensionRefresh() {
 function proposalHTML(row) {
   companyProposal = row;
   $("#company-proposal").innerHTML =
-    `<hr><h3>企业资料草案 · 待你核对</h3><p class="hint">${escape(row.filename)} · ${row.source?.type === "website" ? "网站公开内容，未验证域名所有权" : "来自上传文件的陈述，未独立核实"}</p>${Object.entries(
+    `<hr><h3>待审阅草案</h3><p class="hint">${escape(row.filename)} · ${row.source?.type === "website" ? "网站公开内容，未验证域名所有权" : "来自上传文件的陈述，未独立核实"}</p>${Object.entries(
       row.proposal.profile,
     )
       .filter(([, v]) => v)
@@ -88,7 +89,7 @@ function proposalHTML(row) {
       )
       .join(
         "",
-      )}<p class="hint">另有 ${row.proposal.memories.length} 项共享业务记忆，采用后均标记为未核实。</p><button data-apply-company="${row.id}" type="button" class="primary">已审阅，采用资料与记忆</button>`;
+      )}<p class="hint">另有 ${row.proposal.memories.length} 项待核实的业务记忆</p><button data-apply-company="${row.id}" type="button" class="primary">采用资料和记忆</button>`;
 }
 async function loadCertification() {
   const row = await api(root() + "/company/certification");
@@ -98,7 +99,7 @@ async function loadCertification() {
     confirmed: "本版本资料已由用户确认",
   };
   $("#company-certification").innerHTML =
-    `<h3>${labels[row.status]}</h3><p>独立营业资质核验：尚未进行 · 域名所有权：尚未验证</p>${row.confirmed_at ? `<p class="hint">上次确认：${escape(date(row.confirmed_at))}。确认仅适用于当时资料版本。</p>` : ""}${row.status !== "confirmed" ? `<form id="company-confirm-form" data-extension="true"><input name="expected_version" type="hidden" value="${row.profile_version}"><label class="check"><input name="confirm_accuracy" type="checkbox" required>我确认这些资料准确，并有权代表企业提供。</label><button type="submit" ${row.status === "incomplete" ? "disabled" : ""}>确认当前版本企业资料</button></form>` : ""}`;
+    `<h3>${labels[row.status]}</h3><p>资质与域名所有权未核验</p>${row.confirmed_at ? `<p class="hint">确认于 ${escape(date(row.confirmed_at))}</p>` : ""}${row.status !== "confirmed" ? `<form id="company-confirm-form" data-extension="true"><input name="expected_version" type="hidden" value="${row.profile_version}"><label class="check"><input name="confirm_accuracy" type="checkbox" required>我确认这些资料准确，并有权代表企业提供。</label><button type="submit" ${row.status === "incomplete" ? "disabled" : ""}>确认当前版本企业资料</button></form>` : ""}`;
 }
 const money = (fen) => `¥${(fen / 100).toFixed(2)}`;
 async function loadBilling() {
@@ -109,10 +110,11 @@ async function loadBilling() {
   ]);
   billingCatalog = catalog;
   $("#billing-note").textContent = catalog.note;
+  $("#billing-status").hidden = catalog.checkout_available;
   $("#billing-plans").innerHTML = catalog.plans
     .map(
       (plan) =>
-        `<article class="plan-card ${plan.plan_id === "svip_annual" ? "featured" : ""}"><h3>${escape(plan.name)}</h3><strong>${money(plan.total_fen)}</strong>${plan.discount_fen ? `<p class="hint"><s>${money(plan.list_fen)}</s> · 已减 ${money(plan.discount_fen)}</p>` : ""}<p>立即到账 ${plan.points_now.toLocaleString()} 点${plan.periods ? `<br>每会员月手动领取 ${plan.monthly_points.toLocaleString()} 点 × ${plan.periods}<br>合计 ${plan.total_points.toLocaleString()} 点` : ""}</p>${plan.periods ? "<p class='hint'>不自动续费，错过的会员月不补领。</p>" : ""}<button data-buy-plan="${escape(plan.plan_id)}" type="button">选择套餐</button></article>`,
+        `<article class="plan-card ${plan.plan_id === "svip_annual" ? "featured" : ""}"><h3>${escape(plan.name)}</h3><strong>${money(plan.total_fen)}</strong>${plan.discount_fen ? `<p class="hint"><s>${money(plan.list_fen)}</s> · 已减 ${money(plan.discount_fen)}</p>` : ""}<p>立即到账 ${plan.points_now.toLocaleString()} 点${plan.periods ? `<br>每会员月手动领取 ${plan.monthly_points.toLocaleString()} 点 × ${plan.periods}<br>合计 ${plan.total_points.toLocaleString()} 点` : ""}</p>${plan.periods ? copyHelp("会员领取规则", "会员不自动续费。每月点数需手动领取，逾期不补。") : ""}<button data-buy-plan="${escape(plan.plan_id)}" type="button">选择套餐</button></article>`,
     )
     .join("");
   $("#billing-orders").innerHTML =
@@ -129,7 +131,7 @@ async function loadBilling() {
           `<article class="lead"><b>${escape(row.plan_id === "svip_annual" ? "SVIP 包年" : "SVIP 包月")}</b><p>${escape(date(row.starts_at))} 至 ${escape(date(row.ends_at))}</p><p>${row.current_period === null ? "未生效或已到期" : `当前会员月 ${row.current_period + 1} · ${row.monthly_points.toLocaleString()} 点`}</p>${row.claimable ? `<button data-claim-member="${row.id}" type="button">领取本会员月点数</button>` : `<p class="hint">${row.already_claimed ? "本会员月已领取" : "当前不能领取"}</p>`}</article>`,
       )
       .join("") ||
-    "<p class='hint'>尚无会员权益。充值点数与开通会员分别购买。</p>";
+    "<p class='hint'>暂无会员</p>";
 }
 async function loadDeliveries() {
   const rows = await api(root() + "/mail/deliveries");
@@ -159,20 +161,20 @@ async function renderMailReview(job) {
   const deliveries = await loadDeliveries();
   if (deliveries.some((row) => row.draft_job_id === job.id)) {
     $("#job-detail").insertAdjacentHTML("beforeend",
-      '<div class="notice">这份草稿已有发送记录。请核对下方状态，系统不会重复提交。</div>');
+      '<div class="notice">已有发送记录，请查看状态。</div>');
     return;
   }
   const channel = await api(root() + "/mail/channel");
   if (!channel.enabled) {
     $("#job-detail").insertAdjacentHTML(
       "beforeend",
-      '<p class="hint">自有 SMTP 通道未启用，可下载 .eml 后自行发送。</p>',
+      '<p class="hint">邮箱未配置，可下载 .eml 发送。</p>',
     );
     return;
   }
   if (channel.transport_mode === "local_capture") {
     $("#job-detail").insertAdjacentHTML("beforeend",
-      '<div class="notice">当前邮件通道仅用于本地验收，不会发送到真实收件人。请配置真实 SMTP 后再发送。</div>');
+      '<div class="notice">测试通道，不会实际发送。</div>');
     return;
   }
   const prospect = await api(
@@ -180,12 +182,12 @@ async function renderMailReview(job) {
   );
   if (prospect.do_not_contact) {
     $("#job-detail").insertAdjacentHTML("beforeend",
-      '<div class="notice">该客户已拒绝联系，邮件发送已停止。你仍可查看草稿与历史记录。</div>');
+      '<div class="notice">客户已拒绝联系，无法发送。</div>');
     return;
   }
   $("#job-detail").insertAdjacentHTML(
     "beforeend",
-    `<hr><h3>通过自有邮箱发送</h3><form id="mail-review-form" data-extension="true"><input type="hidden" name="prospect_id" value="${prospect.id}"><input type="hidden" name="draft_job_id" value="${job.id}"><input type="hidden" name="expected_version" value="${prospect.version}"><p>发件人：${escape(channel.sender)} · 每日上限 ${channel.daily_limit} 封</p><label>收件人<input name="recipient" value="${escape(prospect.contact)}" type="email" readonly required></label><label>邮件主题<input name="subject" maxlength="200" value="${escape(job.result.draft.subject)}" required></label><label>审阅后的正文<textarea name="body" rows="10" maxlength="6000" required>${escape(job.result.draft.body)}</textarea></label><p>固定发送页脚：</p><blockquote>${escape(channel.footer)}</blockquote><label class="check"><input name="confirm_send" type="checkbox" required>我已核对收件人、联系理由、正文和页脚，确认提交这封邮件。</label><button type="submit" class="primary" ${prospect.do_not_contact ? "disabled" : ""}>确认并提交发送</button><p class="hint">SMTP 接受不代表已进入收件箱。状态不明时不会自动重发。</p></form>`,
+    `<hr><h3>通过自有邮箱发送</h3><form id="mail-review-form" data-extension="true"><input type="hidden" name="prospect_id" value="${prospect.id}"><input type="hidden" name="draft_job_id" value="${job.id}"><input type="hidden" name="expected_version" value="${prospect.version}"><p>发件人：${escape(channel.sender)} · 每日上限 ${channel.daily_limit} 封</p><label>收件人<input name="recipient" value="${escape(prospect.contact)}" type="email" readonly required></label><label>邮件主题<input name="subject" maxlength="200" value="${escape(job.result.draft.subject)}" required></label><label>审阅后的正文<textarea name="body" rows="10" maxlength="6000" required>${escape(job.result.draft.body)}</textarea></label><p>固定发送页脚：</p><blockquote>${escape(channel.footer)}</blockquote><label class="check"><input name="confirm_send" type="checkbox" required>我已核对收件人、联系理由、正文和页脚，确认提交这封邮件。</label><button type="submit" class="primary" ${prospect.do_not_contact ? "disabled" : ""}>确认并提交发送</button>${copyHelp("发送状态说明", "SMTP 接收只表示服务器接受邮件。发送状态不明时不会自动重发。")}</form>`,
   );
 }
 document.addEventListener("submit", (event) => {

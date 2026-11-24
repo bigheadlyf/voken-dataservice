@@ -854,7 +854,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 25px 0; }
 .sidebar nav button { display: flex; align-items: center; gap: 12px; }
 .sidebar nav button.active { box-shadow: none; background: #eaf0ff; }
 .sidebar-bottom { border-top: 3px solid #ffbc45; }
-.welcome { background: radial-gradient(ellipse at 100% 0%, #fff2d7 0%, transparent 56%), linear-gradient(115deg, #f6f9ff, #eaf1ff); border: 1px solid #dfe8fb; color: var(--navy); min-height: 304px; gap: 32px; }
+.welcome { background: radial-gradient(ellipse at 100% 0%, #fff2d7 0%, transparent 56%), linear-gradient(115deg, #f6f9ff, #eaf1ff); border: 1px solid #dfe8fb; color: var(--navy); min-height: auto; gap: 32px; }
 .welcome::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #2456ee 0%, #2456ee 45%, #ffbc45); }
 .welcome h2 { color: var(--navy); font-weight: 700; font-size: clamp(30px, 3vw, 42px); line-height: 1.45; }
 .welcome h2 em { color: var(--blue); font-style: normal; }
@@ -1001,7 +1001,7 @@ fieldset:disabled .choice-option span { opacity: .55; cursor: progress; }
 .discovery-edit { margin: 15px 0; }
 .discovery-edit > summary, #discovery-free-text > summary { cursor: pointer; font-size: 12px; }
 #discovery-chat-pane { min-width: 0; }
-#discovery-chat-pane > .chat-messages { min-height: 0; max-height: 280px; margin-top: 14px; }
+#discovery-transcript .chat-messages { min-height: 0; max-height: 280px; padding: 10px 0; margin-top: 8px; }
 #discovery-chat-retry { margin-top: 10px; }
 @media(max-width:650px) { .discovery-brief { padding: 14px; } .brief-footer { align-items: flex-start; flex-direction: column; gap: 0; } .discovery-brief > fieldset > button[type=submit] { width: 100%; } .builder-steps { gap: 5px; } .builder-steps span { font-size: 11px; padding: 6px 8px; } }
 
@@ -1013,7 +1013,6 @@ fieldset:disabled .choice-option span { opacity: .55; cursor: progress; }
 .discovery-brief .brief-footer { margin: 8px 0; }
 .discovery-brief .role-choices { margin-top: 12px; }
 .discovery-brief .role-choices legend { margin-bottom: 4px; }
-#discovery-chat-pane > .chat-messages { padding: 10px 0; margin-top: 8px; }
 #discovery-chat-plan, #discovery-chat-questions { scroll-margin-top: 20px; }
 .wb-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 10px; align-items: end; margin-bottom: 16px; }
 .wb-row { padding: 16px; background: var(--surface, white); border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
@@ -1027,3 +1026,67 @@ fieldset:disabled .choice-option span { opacity: .55; cursor: progress; }
 #workbench select, #workbench input, #workbench textarea { max-width: 100%; }
 @media(max-width:650px) { .wb-filters { grid-template-columns: minmax(0,1fr); } #workbench .toolbar { align-items: stretch; } .wb-axes { grid-template-columns: minmax(0,1fr); } }
 @media(max-width:650px) { .brief-basics { grid-template-columns: minmax(0, 1fr); gap: 5px; } }
+.copy-help {
+  display: inline-block;
+  position: relative;
+  margin: 0;
+  vertical-align: middle;
+}
+.copy-help > summary {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #bac7dc;
+  border-radius: 50%;
+  background: #fff;
+  color: #3c5274;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  line-height: 1;
+}
+.copy-help > summary::-webkit-details-marker { display: none; }
+.copy-help > summary:focus-visible { outline: 2px solid #2559ee; outline-offset: 2px; }
+.copy-help > .copy-help-content {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 0;
+  width: min(280px, calc(100vw - 48px));
+  padding: 12px 14px;
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  background: #fff;
+  color: #354762;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: start;
+  line-height: 1.6;
+  box-shadow: 0 6px 20px #15264422;
+}
+.copy-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.copy-heading > :is(h2, h3, h4) { margin: 0; }
+.copy-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.chat-messages:empty { display: none; }
+@media (max-width: 600px) {
+  .copy-help > .copy-help-content {
+    position: fixed;
+    inset: auto 16px 16px;
+    width: auto;
+  }
+}

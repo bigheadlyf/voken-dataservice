@@ -762,6 +762,39 @@ button:focus-visible {
 .drawer-evidence {
   margin-top: 20px;
 }
+.help-hint-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #bac7dc;
+  border-radius: 50%;
+  background: #fff;
+  color: #3c5274;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.help-hint-button:focus-visible {
+  outline: 2px solid #2559ee;
+  outline-offset: 2px;
+}
+.help-hint-content {
+  max-width: min(300px, calc(100vw - 48px));
+  line-height: 1.6;
+}
+.help-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.help-heading > :is(h2, h3, h4) {
+  margin: 0;
+}
 .customer-contact-tools {
   margin-bottom: 16px;
 }

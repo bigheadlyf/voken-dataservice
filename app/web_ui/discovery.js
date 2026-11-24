@@ -1,19 +1,19 @@
 "use strict";
 const discoveryChat = { history: [], plan: null, contextConfiguration: null, questions: [], retryContent: "", retryLabel: "", pending: false, generation: 0, contextWorkspace: null, company: null };
-const discoveryRoles = {any:"不限，先找潜在客户", distributor:"分销商 / 进口商", manufacturer:"制造商", brand:"终端客户 / 品牌", service_provider:"服务商 / 工程商", public_buyer:"政府 / 公共机构"};
+const discoveryRoles = {any:"不限", distributor:"分销商 / 进口商", manufacturer:"制造商", brand:"终端客户 / 品牌", service_provider:"服务商 / 工程商", public_buyer:"政府 / 公共机构"};
 
 function discoveryBriefHTML(plan = null) {
   const editing = !!plan;
-  return `<form id="${editing ? "discovery-edit-form" : "discovery-guided-form"}" data-extension="discovery" class="discovery-brief"><fieldset><legend>${editing ? "修改目标，一次更新方案" : "先选好目标，剩下的交给 Agent"}</legend>
-    <div class="brief-basics"><div><label>你想推广什么产品？<input name="product" maxlength="150" value="${escape(plan?.product || "")}" placeholder="例如：商用 LED 灯具" required></label>
+  return `<form id="${editing ? "discovery-edit-form" : "discovery-guided-form"}" data-extension="discovery" class="discovery-brief"><fieldset><legend class="copy-visually-hidden">${editing ? "修改找客条件" : "找客条件"}</legend>
+    <div class="brief-basics"><div><label>产品<input name="product" maxlength="150" value="${escape(plan?.product || "")}" placeholder="例如：商用 LED 灯具" required></label>
     ${editing ? "" : '<div id="discovery-company-products" class="choice-suggestions"></div>'}
-    </div><div><label>想在哪个市场找客户？<input name="market" maxlength="100" value="${escape(plan?.market || "")}" placeholder="选择下方市场，或填写其他国家 / 地区"></label>
-    <div class="choice-suggestions" role="group" aria-label="目标市场快捷选择">${["美国","德国","英国","东南亚","中东"].map(value => `<button type="button" data-brief-field="market" data-brief-value="${value}" aria-pressed="${plan?.market === value}">${value}</button>`).join("")}<button type="button" data-brief-field="market" data-brief-value="请帮我推荐市场" aria-pressed="false">还没想好，帮我推荐</button></div>
+    </div><div><label>目标市场<input name="market" maxlength="100" value="${escape(plan?.market || "")}" placeholder="输入国家或地区"></label>
+    <div class="choice-suggestions" role="group" aria-label="目标市场快捷选择">${["美国","德国","英国","东南亚","中东"].map(value => `<button type="button" data-brief-field="market" data-brief-value="${value}" aria-pressed="${plan?.market === value}">${value}</button>`).join("")}<button type="button" data-brief-field="market" data-brief-value="请帮我推荐市场" aria-pressed="false">推荐市场</button></div>
     ${editing ? "" : '<div id="discovery-company-markets" class="choice-suggestions"></div>'}
-    </div></div><details class="brief-preferences"><summary>客户类型与数量 · ${escape(discoveryRoles[plan?.buyer_role || "any"])} / ${plan?.target_count || 10}家</summary><fieldset class="role-choices"><legend>想找哪类客户？</legend><div class="choice-options">${Object.entries(discoveryRoles).map(([value,label]) => `<label class="choice-option"><input name="buyer_role" type="radio" value="${value}" ${(plan?.buyer_role || "any") === value ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset>
-    <div class="brief-footer"><label>先找多少家？<select name="target_count">${[...new Set([10,20,30,...(plan ? [plan.target_count] : [])])].map(count => `<option value="${count}" ${count === (plan?.target_count || 10) ? "selected" : ""}>${count} 家</option>`).join("")}</select></label><p class="hint">默认不限客户类型，先找10家；可在方案里继续调整。</p></div>
-    </details><details><summary>补充筛选要求（选填）</summary><label>希望包含或排除哪些客户？<textarea name="requirements" rows="2" maxlength="1600" placeholder="例如：排除零售商，优先有实体门店的企业">${escape(plan?.instructions || "")}</textarea></label></details>
-    <button type="submit" class="primary">${editing ? "应用修改，更新方案" : "帮我生成任务方案"} →</button><p class="hint">这一步只整理需求，不创建任务、不预占任务点数。</p>
+    </div></div><details class="brief-preferences"><summary>客户类型与数量 · ${escape(discoveryRoles[plan?.buyer_role || "any"])} / ${plan?.target_count || 10}家</summary><fieldset class="role-choices"><legend>客户类型</legend><div class="choice-options">${Object.entries(discoveryRoles).map(([value,label]) => `<label class="choice-option"><input name="buyer_role" type="radio" value="${value}" ${(plan?.buyer_role || "any") === value ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset>
+    <div class="brief-footer"><label>目标数量<select name="target_count">${[...new Set([10,20,30,...(plan ? [plan.target_count] : [])])].map(count => `<option value="${count}" ${count === (plan?.target_count || 10) ? "selected" : ""}>${count} 家</option>`).join("")}</select></label></div>
+    </details><details><summary>筛选要求</summary><label>补充条件<textarea name="requirements" rows="2" maxlength="1600" placeholder="例如：排除零售商，优先有实体门店的企业">${escape(plan?.instructions || "")}</textarea></label></details>
+    <button type="submit" class="primary">${editing ? "更新方案" : "生成方案"}</button>
   </fieldset></form>`;
 }
 function discoveryBriefMessage(form) {
@@ -49,7 +49,7 @@ function renderDiscoveryCompanySuggestions() {
 }
 function discoveryQuestionsHTML(questions) {
   if (!questions.length) return "";
-  return `<form id="discovery-answers-form" data-extension="discovery" class="discovery-brief"><p class="eyebrow">只补充缺少的信息</p><fieldset><legend>点选后，一次提交</legend>${questions.map((question, index) => `<fieldset class="question-card"><legend>${escape(question.title)}</legend>${question.options.length ? `<div class="choice-options">${question.options.map((option, number) => `<label class="choice-option"><input type="radio" name="answer${index}" value="${number}" required><span>${escape(option)}</span></label>`).join("")}<label class="choice-option"><input type="radio" name="answer${index}" value="custom" required><span>自行填写</span></label></div><label>其他答案（选填，输入后采用）<input name="custom${index}" data-question-custom="${index}" maxlength="150" placeholder="填写自己的答案"></label>` : `<label>你的答案<input name="custom${index}" maxlength="150" required></label>`}</fieldset>`).join("")}<button type="submit" class="primary">采用这些选择，继续 →</button></fieldset></form>`;
+  return `<form id="discovery-answers-form" data-extension="discovery" class="discovery-brief"><fieldset><legend>补充条件</legend>${questions.map((question, index) => `<fieldset class="question-card"><legend>${escape(question.title)}</legend>${question.options.length ? `<div class="choice-options">${question.options.map((option, number) => `<label class="choice-option"><input type="radio" name="answer${index}" value="${number}" required><span>${escape(option)}</span></label>`).join("")}<label class="choice-option"><input type="radio" name="answer${index}" value="custom" required><span>自行填写</span></label></div><label>其他答案<input name="custom${index}" data-question-custom="${index}" maxlength="150" placeholder="填写自己的答案"></label>` : `<label>你的答案<input name="custom${index}" maxlength="150" required></label>`}</fieldset>`).join("")}<button type="submit" class="primary">继续</button></fieldset></form>`;
 }
 function discoveryAnswersSummary(form) {
   const data = formData(form);
@@ -116,12 +116,17 @@ function resetDiscoveryChat() {
 function renderDiscoveryMessages(pendingContent = "") {
   const rows = discoveryChat.history;
   $("#discovery-chat-messages").innerHTML = rows.map((row) =>
-    `<article class="chat-message ${row.role === "user" ? "from-user" : "from-agent"}"><span class="chat-speaker">${row.role === "user" ? "你" : "拓客 Agent"}</span><p>${escape(row.displayContent || row.content)}</p></article>`,
-  ).join("") + (pendingContent ? `<article class="chat-message from-user"><span class="chat-speaker">你</span><p>${escape(pendingContent)}</p></article><p class="chat-thinking">Agent 正在整理你的需求…</p>` : "");
+    `<article class="chat-message ${row.role === "user" ? "from-user" : "from-agent"}"><span class="chat-speaker">${row.role === "user" ? "你" : "AI"}</span><p>${escape(row.displayContent || row.content)}</p></article>`,
+  ).join("") + (pendingContent ? `<article class="chat-message from-user"><span class="chat-speaker">你</span><p>${escape(pendingContent)}</p></article><p class="chat-thinking">正在整理方案…</p>` : "");
   $("#discovery-chat-examples").hidden = discoveryChat.history.length > 0 || discoveryChat.pending;
   syncDiscoveryBuilder();
   const log = $("#discovery-chat-messages");
   log.hidden = !rows.length && !pendingContent;
+  const transcript = $("#discovery-transcript");
+  if (transcript) {
+    transcript.hidden = log.hidden;
+    transcript.open = !log.hidden && !discoveryChat.plan;
+  }
   log.scrollTop = log.scrollHeight;
 }
 
@@ -130,29 +135,30 @@ function discoveryPlanHTML(plan) {
     ["任务名称", plan.name], ["目标市场", plan.market], ["产品", plan.product],
     ["目标数量", `${plan.target_count} 家`],
     ["客户角色", ({any:"不限，按描述筛选",distributor:"分销商 / 进口商",manufacturer:"制造商",brand:"终端客户 / 品牌",service_provider:"服务商 / 工程商",public_buyer:"政府 / 公共机构采购方"})[plan.buyer_role] || "不限"],
-    ["排除条件", plan.exclude_keywords?.join("、") || "未指定"],
-    ["排除域名", plan.exclude_domains?.join("、") || "未指定"],
+    ...(plan.exclude_keywords?.length ? [["排除条件", plan.exclude_keywords.join("、")]] : []),
+    ...(plan.exclude_domains?.length ? [["排除域名", plan.exclude_domains.join("、")]] : []),
     ...(plan.reference_websites?.length ? [["更多参考客户", plan.reference_websites.join("、")]] : []),
     ["筛选要求", plan.instructions],
     ...(plan.seed_website ? [["参考官网", plan.seed_website]] : []),
     ...(plan.hs_code ? [["HS 编码", plan.hs_code]] : []),
     ...(plan.public_sources?.length ? [["补充来源", "近 90 天 TED 官方招标"]] : []),
   ];
-  return `<form id="discovery-chat-create" data-extension="discovery" class="chat-plan"><p class="eyebrow">任务方案 · 等待你确认</p><h3>准备好后，再开始找客户</h3><dl>${fields.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join("")}</dl><label>数据方案<select name="tier" id="discovery-chat-tier"><option value="basic">基础发现 · 公开搜索</option><option value="enhanced">高级档 · 公开搜索 + 跨境魔方</option><option value="ai_enhanced">AI增强档 · 高级档 + 目标岗位联系人</option></select></label><label>AI增强目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label><p id="discovery-chat-price" class="notice"></p><label class="check" id="discovery-chat-paid" hidden><input name="paid" type="checkbox">同意按当前档位报价预占平台点数与数据预算，按费用结算并释放差额。</label><label class="check"><input name="reviewed" type="checkbox" required>我已核对任务条件与预占点数。</label><div class="actions"><button type="submit" class="primary">确认并创建任务 →</button><button type="button" id="discovery-plan-to-form">转到表单编辑</button></div><p class="hint">还想调整？展开下方条件卡，点选修改后一次更新。</p></form><details class="discovery-edit"><summary>修改产品、市场、客户类型或数量</summary>${discoveryBriefHTML(plan)}</details>`;
+  return `<form id="discovery-chat-create" data-extension="discovery" class="chat-plan"><h3>任务方案</h3><dl>${fields.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join("")}</dl><label>数据方案<select name="tier" id="discovery-chat-tier"><option value="basic">基础发现 · 公开搜索</option><option value="enhanced">高级档 · 公开搜索 + 跨境魔方</option><option value="ai_enhanced">AI增强档 · 高级档 + 目标岗位联系人</option></select></label><label id="discovery-chat-contact-target" hidden>目标岗位<select name="contact_target"><option value="procurement">采购 / 寻源 / 供应链</option><option value="leadership">企业负责人</option><option value="sales">销售 / 业务开发</option><option value="engineering">技术 / 工程</option></select></label><p id="discovery-chat-price" class="notice"></p><label class="check" id="discovery-chat-paid" hidden><input name="paid" type="checkbox">同意预占所示点数</label><label class="check"><input name="reviewed" type="checkbox" required>已核对任务条件和报价</label><div class="actions"><button type="submit" class="primary">创建任务</button><button type="button" id="discovery-plan-to-form">转为手动填写</button></div></form><details class="discovery-edit"><summary>修改找客条件</summary>${discoveryBriefHTML(plan)}</details>`;
 }
 
 function updateDiscoveryChatQuote() {
   const select = $("#discovery-chat-tier");
   if (!select) return;
   const enhanced = select.value !== "basic";
+  $("#discovery-chat-contact-target").hidden = select.value !== "ai_enhanced";
   const quote = state.pointQuotes?.[select.value === "ai_enhanced" ? "prospecting_ai_enhanced" : enhanced ? "prospecting_enhanced" : "prospecting"];
   $("#discovery-chat-paid").hidden = !enhanced;
   $("#discovery-chat-paid input").required = enhanced;
   $("#discovery-chat-paid input").checked = false;
   $("#discovery-chat-create [name=reviewed]").checked = false;
   $("#discovery-chat-price").textContent = quote
-    ? `本次最多预占 ${quote.total_points} 点：平台 ${quote.platform_points} 点，数据 ${quote.data_points} 点；未使用部分释放。`
-    : "点数报价尚未加载，请刷新数据后再创建。";
+    ? `预占 ${quote.total_points} 点（平台 ${quote.platform_points}，数据 ${quote.data_points}）`
+    : "报价未加载，请刷新";
   $("#discovery-chat-create button[type=submit]").disabled = !quote;
 }
 
@@ -223,7 +229,7 @@ async function sendDiscoveryMessage(content, displayContent = content) {
     }
   } catch (error) {
     if (generation !== discoveryChat.generation) return;
-    $("#discovery-chat-error").textContent = error.message + "。刚才的选择已保留，可点击重试，或修改条件后再提交。";
+    $("#discovery-chat-error").textContent = error.message + "。可重试或修改条件。";
     $("#discovery-chat-error").hidden = false;
   } finally {
     if (generation === discoveryChat.generation) {

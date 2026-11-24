@@ -40,13 +40,13 @@ async function directorySubmit(path, payload, slot, onAccepted) {
 function directoryResultHTML(data) {
   const records = data.records || [];
   const quota = data.quota_usage || {};
-  let html = data.source === "hunter" ? `<div class="notice">来源：Hunter · ${records.length} 个邮箱候选 · 目标岗位命中 ${data.matched_contact_count || 0} 条。岗位与有效性仍须分别核对。</div>` : `<div class="notice">本页 ${records.length} 条${data.has_more ? " · 还有下一页" : ""}<br>来源：${data.source === "hunter" ? "Hunter 精准岗位检索" : data.source === "upkuajing+hunter" ? "跨境魔方 + Hunter" : "跨境魔方"} · ${escape(quota.billing_mode || "未回传计费模式")} · 请求扣量 ${quota.request_units || 0} · 记录扣量 ${quota.record_units || 0} · 解锁扣量 ${quota.unlock_units || 0}<br>现金费用为零时，套餐配额仍可能被消耗。</div>`;
+  let html = data.source === "hunter" ? `<div class="notice">来源：Hunter · ${records.length} 个邮箱候选 · 目标岗位命中 ${data.matched_contact_count || 0} 条 ${copyHelp("岗位与邮箱说明", "岗位命中和邮箱有效性分别核对。")}</div>` : `<div class="notice">本页 ${records.length} 条${data.has_more ? " · 还有下一页" : ""}<br>来源：${data.source === "hunter" ? "Hunter 精准岗位检索" : data.source === "upkuajing+hunter" ? "跨境魔方 + Hunter" : "跨境魔方"} · ${escape(quota.billing_mode || "未回传计费模式")} · 请求扣量 ${quota.request_units || 0} · 记录扣量 ${quota.record_units || 0} · 解锁扣量 ${quota.unlock_units || 0} ${copyHelp("套餐扣量说明", "即便现金费用为零，查询也可能消耗套餐配额。")}</div>`;
   if (data.hunter_fallback) html += `<p class="hint">已补查 Hunter：${escape(({matches:"取得邮箱，仍须核对归属",no_matches:"未找到邮箱",failed:"本次补查未完成"})[data.hunter_fallback.status] || "状态未知")}；积分消耗 ${escape(data.hunter_fallback.credits_used ?? "未回传")}，不等于人民币账单。</p>`;
   if (data.search_target) html += `<p class="notice">目标岗位：${escape(({procurement:"采购 / 寻源 / 供应链",leadership:"企业负责人",sales:"销售 / 业务开发",engineering:"技术 / 工程"})[data.search_target] || data.search_target)} · Hunter 积分 ${escape(data.credits_used ?? "未回传")}；岗位匹配不等于已确认采购权限。</p>`;
   if (data.kind === "contacts") {
-    html += `<h3>${escape(data.subject?.name || "所选主体")}</h3><p>${escape((data.subject?.titles || []).join(" / "))}</p><p class="hint">有效性为上游标记，取得时间不等于验证时间；任职、企业归属与当前采购需求仍须核实。</p>`;
+    html += `<h3>${escape(data.subject?.name || "所选主体")}</h3><p>${escape((data.subject?.titles || []).join(" / "))}</p>${copyHelp("联系方式来源说明", "有效性是供应商标记，取得时间与验证时间分别记录。任职、企业归属和当前需求需另行核对。")}`;
     html += providerEvidenceHTML(data,"buyer");
-    html += records.length ? `<form id="directory-save-contact" data-extension="directory"><label>保存到客户<select name="prospect_id" id="directory-prospect-select"><option value="">选择已保存客户</option></select></label><label class="check"><input type="checkbox" name="reviewed" required />已核对企业归属与联系用途；仅保存独立候选，不替换客户主联系方式</label><button type="submit">保存候选联系人</button></form>` : '<p class="notice">本次没有返回具体联系方式。不会把邮箱库存数当作补全成功。</p>';
+    html += records.length ? `<form id="directory-save-contact" data-extension="directory"><label>保存到客户<select name="prospect_id" id="directory-prospect-select"><option value="">选择已保存客户</option></select></label><label class="check"><input type="checkbox" name="reviewed" required />已核对企业归属及联系用途</label><button type="submit">保存为候选</button></form>` : '<p class="notice">暂无联系方式</p>';
   } else {
     const people = data.kind === "people";
     html += `<p class="hint">${people ? "人物国家与雇主国家可能不同；职位按上游原文展示。" : "企业库记录不是当前采购需求。请先看地址与公司身份，再解锁。"}</p>`;
@@ -54,7 +54,7 @@ function directoryResultHTML(data) {
       const count = record.contact_inventory || {};
       html += `<article class="lead"><b>${escape(record.name)}</b><p>${escape(record.company_name || "")} · ${escape(record.country || "国家未知")}</p><p>${escape((record.titles || []).join(" / "))}</p>${record.title_match === false ? '<p class="hint">返回岗位与职位词未直接匹配，需复核</p>' : ""}<p>${escape((record.addresses || []).join("；"))}</p><p class="hint">规模 ${escape(record.employee_range || "未知")} · 邮箱库存 ${count.email_num ?? "未知"} · 电话库存 ${count.phone_num ?? "未知"} · 社媒库存 ${count.social_num ?? "未知"}</p><div class="actions">${people ? `<button data-directory-save-person="${escape(record.record_id)}">已核对归属，保存岗位候选</button>` : `<button data-directory-people="${escape(record.record_id)}">查这家公司的人员</button><button data-directory-save-company="${escape(record.record_id)}">保存为待核实客户</button>`}</div><label class="check"><input type="checkbox" data-directory-unlock-confirm="${escape(record.record_id)}" />同意单个主体最多预占50数据点（¥0.50预算），另加平台点数</label><button data-directory-unlock="${escape(record.record_id)}">解锁所选主体联系方式</button></article>`;
     }
-    if (!records.length) html += '<p class="notice">本页未查到记录。可以调整名称或筛选；不会自动放宽条件产生额外费用。</p>';
+    if (!records.length) html += '<p class="notice">暂无结果，可调整名称或筛选。</p>';
     if (data.has_more) html += '<label class="check"><input id="directory-next-confirm" type="checkbox" />同意下一页的150数据点预占及平台点数</label><button id="directory-next">查询下一页</button>';
   }
   return html;

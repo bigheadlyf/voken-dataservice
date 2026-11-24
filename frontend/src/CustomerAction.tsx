@@ -158,7 +158,7 @@ export function CustomerActionModal({
         )}
         {action === "draft" && (
           <>
-            {!customDraft && <Typography.Paragraph>默认生成英文草稿，简洁介绍产品并询问需求。</Typography.Paragraph>}
+            {!customDraft && <Typography.Text type="secondary">默认英文</Typography.Text>}
             <Button type="link" className="draft-options" aria-expanded={customDraft}
               onClick={() => setCustomDraft(!customDraft)}>
               {customDraft ? "收起草稿选项" : "修改语言和目标"}

@@ -11,6 +11,7 @@ import {
   Typography,
 } from "antd";
 import type { Bridge, RecordData } from "./bridge";
+import { HelpHint } from "./HelpHint";
 
 export type WorkbenchAction = {
   kind: "review" | "event" | "followup";
@@ -125,7 +126,9 @@ export function WorkbenchActionModal({
         {action.kind === "review" && (
           <>
             <Typography.Paragraph type="secondary">
-              {action.row!.name} · 新增独立评审记录，并保留原始证据。
+              {action.row!.name}
+              {" "}
+              <HelpHint label="评审记录说明">每次评审单独记录，原始证据会保留。</HelpHint>
             </Typography.Paragraph>
             <Form.Item
               name="status"
@@ -202,10 +205,12 @@ export function WorkbenchActionModal({
             >
               <Input.TextArea maxLength={4000} rows={4} showCount />
             </Form.Item>
-            <Alert
-              type="info"
-              title="退信与拒绝联系会拦截后续发送；收到回复会暂停后续提醒。"
-            />
+            {["reply", "bounce", "opt_out"].includes(eventType) && (
+              <Alert
+                type="info"
+                title={eventType === "reply" ? "收到回复后会暂停提醒。" : "退信或拒绝联系后会拦截发送。"}
+              />
+            )}
           </>
         )}
         {action.kind === "followup" && (
@@ -269,10 +274,9 @@ export function WorkbenchActionModal({
                 placeholder="例如：核对采购职责，审阅并准备第一封开发信"
               />
             </Form.Item>
-            <Alert
-              type="info"
-              title="这里只安排提醒。每封邮件仍需单独审阅确认后发送。"
-            />
+            <HelpHint label="跟进提醒说明">
+              提醒不会发送邮件。收到回复、退信或停止联系时，后续提醒会暂停。
+            </HelpHint>
           </>
         )}
         <div className="modal-form-footer">

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { HelpHint } from "./HelpHint";
 import {
   Alert, Button, Card, Descriptions, Modal, Statistic, Tabs, Tag, Timeline,
 } from "antd";
@@ -90,11 +91,12 @@ function DemoBanner({ mode }: { mode: "payment" | "protection" }) {
       <div>
         <div className="business-banner-heading">
           <h2>{payment ? "马来西亚跨境采购试点" : "马来西亚出海服务试点"}</h2>
-          <Tag color="gold">演示环境</Tag>
+          <Tag color="gold">演示</Tag>
+          <HelpHint label="演示说明">
+            {payment ? "订单与流水均为样例。演示对账不会发起真实收款，刷新后恢复样例。"
+              : "订单和资料均为样例。预览不会提交投保或融资申请。"}
+          </HelpHint>
         </div>
-        <p>{payment
-          ? "跟踪订单应收、准备收款提醒，并核对支付渠道回传的流水。所有订单和流水均为样例。"
-          : "按订单整理货运与经营保障需求，检查应收融资材料。所有材料和进度均为样例。"}</p>
       </div>
     </div>
   );
@@ -102,13 +104,13 @@ function DemoBanner({ mode }: { mode: "payment" | "protection" }) {
 
 function status(order: DemoOrder) {
   if (!remaining(order)) return { text: "已结清", color: "green" };
-  if (order.receipt) return { text: "有流水待核对", color: "orange" };
+  if (order.receipt) return { text: "待对账", color: "orange" };
   return { text: "待回款", color: "blue" };
 }
 
 function OrderList({ orders, order, select }: DemoPageProps) {
   return (
-    <Card title="选择演示订单" className="demo-order-list">
+    <Card title="演示订单" className="demo-order-list">
       <div className="demo-order-options" role="group" aria-label="演示订单">
         {orders.map((item) => (
           <button type="button" key={item.id} aria-pressed={item.id === order.id} onClick={() => select(item)}>
@@ -160,17 +162,17 @@ export function PaymentsDemo({ orders, order, select, reconcile, openProtection 
           </div>
           <h3 className="demo-subheading">订单与收款进度</h3>
           <Timeline items={[
-            { color: "green", content: "买卖双方确认报价、合同及付款条款" },
-            { color: order.received ? "green" : "gray", content: order.received ? `已入账 ${formatUsd(order.received)}` : "等待支付渠道回传流水" },
+            { color: "green", content: "已确认合同与付款条款" },
+            { color: order.received ? "green" : "gray", content: order.received ? `已入账 ${formatUsd(order.received)}` : "等待回款" },
             { color: receipt ? "orange" : balance ? "gray" : "green", content: receipt
               ? `渠道流水 ${receipt.reference} 待人工核对`
-              : balance ? "待收到款项并完成对账" : "应收余额为零，已结清" },
+              : balance ? "待对账" : "应收余额为零，已结清" },
           ]} />
         </Card>
       </div>
       <Modal open={dialog === "reminder"} title="收款跟进员 · 提醒草稿" onCancel={() => setDialog(null)}
         footer={<Button onClick={() => setDialog(null)}>关闭预览</Button>}>
-        <Alert type="info" showIcon title="演示草稿，仅供人工审阅" />
+        <Alert type="info" showIcon title="演示草稿" />
         <p>{order.buyer}，您好！想与您核对订单 {order.id}「{order.product}」的付款进度。</p>
         <p>根据样例账面记录，当前待回款 {formatUsd(balance)}，约定付款节点为{order.due}。如已安排付款，请回复交易参考号，便于核对。谢谢！</p>
       </Modal>
@@ -183,7 +185,7 @@ export function PaymentsDemo({ orders, order, select, reconcile, openProtection 
           { key: "expected", label: "待回款", children: formatUsd(balance) },
         ]} />
         {matches ? (
-          <Alert type="success" showIcon title="样例流水的订单号、币种与应收金额已匹配" description="确认后更新本次演示金额。重新打开页面后恢复初始样例。" />
+          <Alert type="success" showIcon title="流水与应收匹配" />
         ) : (
           <Alert type="warning" showIcon title="流水与应收信息有差异，请人工复核。" />
         )}

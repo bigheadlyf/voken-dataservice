@@ -135,6 +135,22 @@ const state = {
   sources: [],
 };
 let toastTimer;
+function copyHelp(label, content) {
+  return `<details class="copy-help"><summary aria-label="${escape(label)}">?</summary><div class="copy-help-content">${escape(content)}</div></details>`;
+}
+document.addEventListener("click", (event) => {
+  const clicked = event.target.closest?.(".copy-help");
+  for (const help of document.querySelectorAll(".copy-help[open]")) {
+    if (help !== clicked) help.open = false;
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const help = document.querySelector(".copy-help[open]");
+  if (!help) return;
+  help.open = false;
+  help.querySelector("summary")?.focus();
+});
 function escape(value) {
   return String(value ?? "").replace(
     /[&<>"']/g,
@@ -430,7 +446,7 @@ async function loadGlobal() {
 }
 function updateDiscoveryPrice() {
   const targetedQuote = state.pointQuotes?.targeted_contacts;
-  if (targetedQuote && $("#targeted-contact-price")) $("#targeted-contact-price").textContent = `本次最多预占 ${targetedQuote.total_points} 点：平台 ${targetedQuote.platform_points} 点，数据预算 ${targetedQuote.data_points} 点。最多两次 Hunter 岗位查询，未使用部分释放；积分单独记录，不自动发信。`;
+  if (targetedQuote && $("#targeted-contact-price")) $("#targeted-contact-price").textContent = `预占 ${targetedQuote.total_points} 点（平台 ${targetedQuote.platform_points}，数据 ${targetedQuote.data_points}）`;
   const tier = $('#discovery-form [name="tier"]').value;
   const contactTarget = $("#discovery-contact-target");
   if (contactTarget) contactTarget.hidden = tier !== "ai_enhanced";
@@ -440,7 +456,7 @@ function updateDiscoveryPrice() {
     ];
   if (quote)
     $("#discovery-price").textContent =
-      `本次最多预占 ${quote.total_points} 点：平台 ${quote.platform_points} 点，数据 ${quote.data_points} 点。数据按明确回传费用结算，未使用部分释放。`;
+      `预占 ${quote.total_points} 点（平台 ${quote.platform_points}，数据 ${quote.data_points}）`;
 }
 async function switchTab(tab) {
   if (tab.startsWith("jobs/")) {
@@ -486,12 +502,12 @@ function stat(label, value, note = "") {
 async function loadOverview() {
   const data = await api(root() + "/crm/summary");
   $("#stats").innerHTML =
-    stat("已保存客户", data.total, "独立客户管线") +
-    stat("待跟进", data.due_followups, "到期且允许联系") +
-    stat("正在洽谈", data.stages.negotiating || 0, "持续推进商机") +
-    stat("已成交", data.stages.won || 0, "来自你记录的反馈");
+    stat("已保存客户", data.total) +
+    stat("到期待跟进", data.due_followups) +
+    stat("正在洽谈", data.stages.negotiating || 0) +
+    stat("已成交", data.stages.won || 0);
   $("#next-actions").innerHTML =
-    `<div class="notice">${data.due_followups ? `有 ${data.due_followups} 位客户到了约定跟进时间。` : "当前没有到期的跟进。可以发现新客户，或为已有客户安排下一步。"}</div><div class="actions"><button data-tab="customers">查看客户管理 →</button><button data-tab="company">完善企业资料</button></div><p class="hint">已停止联系 ${data.do_not_contact} 位客户。成交和回复数据以实际记录为准。</p>`;
+    `<div class="notice">${data.due_followups ? `${data.due_followups} 位客户待跟进` : "暂无到期客户"}</div><div class="actions"><button data-tab="customers">查看客户</button><button data-tab="company">完善企业资料</button></div><p class="hint">已停止联系 ${data.do_not_contact} 位客户</p>`;
 }
 function filters() {
   const params = new URLSearchParams({ offset: state.offset, limit: 30 });
@@ -574,17 +590,17 @@ async function selectJob(id) {
   let body = `<p class="eyebrow">${escape(operations[row.operation] || row.operation)}</p><h2>${escape(statuses[row.status] || row.status)}</h2><p class="hint">${escape(date(row.created_at))} · 预占 ${row.point_cost} 点 · 已结算 ${row.points_charged} 点</p>`;
   if (["queued", "running", "cancelling"].includes(row.status))
     body +=
-      '<div class="notice">任务正在服务端处理，本页每 5 秒自动更新。也可以稍后再来。</div>';
+      '<div class="notice">处理中，每 5 秒刷新</div>';
   if (row.error)
     body += `<div class="notice">${escape(readable(row.error))}</div>`;
   if (result.warnings?.length)
-    body += `<p class="hint">部分来源有缺口：${result.warnings.map((code) => escape(readable(code))).join("、")}</p>`;
+    body += `<p class="hint">来源缺口：${result.warnings.map((code) => escape(readable(code))).join("、")}</p>`;
   if (result.paid_usage)
-    body += `<div class="notice">数据增强已预留/计入 ¥${(result.paid_usage.committed_milli_cny / 1000).toFixed(3)}${result.paid_usage.has_unconfirmed_cost ? "，含未确认费用。" : "。"} 已明确回传的数据费用按任务报价换算点数，未另收一笔人民币费用。</div>`;
+    body += `<div class="notice">数据费用 ¥${(result.paid_usage.committed_milli_cny / 1000).toFixed(3)}${result.paid_usage.has_unconfirmed_cost ? "（含未确认金额）" : ""} ${copyHelp("数据费用说明", "已回传的费用按任务报价折算为点数，未另收人民币费用。")}</div>`;
   if (result.point_settlement)
     body += `<p class="hint">点数结算：平台 ${result.point_settlement.platform_points} 点，数据 ${result.point_settlement.data_points} 点；释放 ${result.point_settlement.released_points} 点。</p>`;
   if (result.leads) {
-    body += '<details><summary>筛选反馈原因（用于下一次相同画像）</summary><label>原因类别<select id="feedback-reason-code"><option value="other">其他／未填写</option><option value="role">客户角色不符</option><option value="product">产品不符</option><option value="country">市场不符</option><option value="size">规模不符</option><option value="competitor">同行／竞争关系</option><option value="logistics">物流货代主体</option></select></label><label>补充说明<input id="feedback-reason" maxlength="500"></label></details>';
+    body += '<details><summary>反馈原因</summary><label>原因类别<select id="feedback-reason-code"><option value="other">其他／未填写</option><option value="role">客户角色不符</option><option value="product">产品不符</option><option value="country">市场不符</option><option value="size">规模不符</option><option value="competitor">同行／竞争关系</option><option value="logistics">物流货代主体</option></select></label><label>补充说明<input id="feedback-reason" maxlength="500"></label></details>';
     if (result.lead_review) {
       const r = result.lead_review;
       body += r.status === "completed" ? `<p class="hint">AI 二次复核 ${Number(r.assessed || 0)} 家 · 调整来源 ${Number(r.source_reassignments || 0)} 家 · 有原句依据的不匹配 ${r.excluded?.length || 0} 家；仍须人工核对。</p>${r.excluded?.length ? `<details><summary>查看未推荐候选及依据</summary>${r.excluded.map(x => `<article class="lead"><b>${escape(x.name)}</b><p>${escape(x.assessment?.explanation || "")}</p>${["role","product","country"].filter(k => x.assessment?.[k+"_fit"] === "not_fit").map(k => `<blockquote>${escape(x.assessment[k+"_quote"] || "")}</blockquote>`).join("")}${safeLink(x.source_url)}</article>`).join("")}</details>` : ""}` : r.status === "unavailable" ? '<p class="hint">AI 二次复核本次不可用，以下结果仍经过原有来源与原句校验。</p>' : "";
@@ -594,8 +610,8 @@ async function selectJob(id) {
       body += `<div class="notice">独立企业 ${s.companies} 家 · 有邮箱企业 ${s.companies_with_email} 家 · 有正文短句 ${s.companies_with_quote} 家 · 有未来截止依据的需求 ${s.dated_future_demand} 条</div>`;
     }
     body += result.leads.length
-      ? `<p class="hint">${result.leads.length} 条线索。请核对来源、产品和企业角色后保存。</p><button id="save-all-leads" class="primary">全部保存到客户管线</button>`
-      : '<div class="empty">本次没有获得可交付的客户线索。可收窄产品或调整市场后再试。</div>';
+      ? `<div class="actions"><button id="save-all-leads" class="primary">保存全部（${result.leads.length}）</button>${copyHelp("线索与反馈说明", "保存前核对来源、产品和企业角色。反馈用于后续相同画像的任务。")}</div>`
+      : '<div class="empty">暂无线索，可调整市场或产品后重试。</div>';
     body += result.leads
       .map(
         (lead, index) =>
@@ -605,15 +621,15 @@ async function selectJob(id) {
   }
   if (result.draft) {
     const draft = result.draft;
-    body += `<div class="notice" id="draft-delivery-status">草稿已生成 · 请核实收件人、产品承诺和联系理由。发送进度可在「工具 → 邮件管理」查看。</div><h3>${escape(draft.subject)}</h3><div class="draft-text">${escape(draft.body)}</div><div class="actions"><button id="copy-draft">复制邮件</button><button id="download-draft">下载 .eml 邮件</button><button data-prospect-jump="${escape(draft.prospect_id)}">查看客户 →</button></div><p class="hint">${(draft.review_notes || []).map(escape).join("；")}</p>`;
+    body += `<div class="notice" id="draft-delivery-status">发送前请核对收件人、产品承诺和联系理由。</div><h3>${escape(draft.subject)}</h3><div class="draft-text">${escape(draft.body)}</div><div class="actions"><button id="copy-draft">复制邮件</button><button id="download-draft">下载 .eml 邮件</button><button data-prospect-jump="${escape(draft.prospect_id)}">查看客户 →</button></div>${draft.review_notes?.length ? copyHelp("草稿审阅提示", draft.review_notes.join("；")) : ""}`;
   }
   if (result.source_lookup) {
     const lookup = result.source_lookup;
-    body += `<div class="notice">${escape(sourceNames[lookup.source_id] || lookup.source_id)} · 本页 ${lookup.records.length} 条${lookup.total_reported != null ? ` / 上游报告 ${lookup.total_reported} 条` : ""}${lookup.has_more ? " · 还有更多，本次未自动翻页" : ""}<br>公开记录不代表采购意向已验证。</div>`;
+    body += `<div class="notice">${escape(sourceNames[lookup.source_id] || lookup.source_id)} · 本页 ${lookup.records.length} 条${lookup.total_reported != null ? ` / 上游报告 ${lookup.total_reported} 条` : ""}${lookup.has_more ? " · 还有更多" : ""} ${copyHelp("公开记录说明", "请在原文中核对采购主体、公告时效和投标资格。历史中标仅作参考。")}</div>`;
     if (lookup.search_scope === "one_upstream_page_not_global_keyword_search")
       body += `<p class="notice">仅扫描上游一页 ${Number(lookup.scanned_count || 0)} 条，本页关键词匹配 ${Number(lookup.matched_in_page || 0)} 条，展示 ${lookup.records.length} 条；不是全库关键词搜索。${lookup.date_filter?.field === "updated" ? "时间窗口按记录更新。" : "时间窗口按发布时间。"}中标与合同记录不表示仍开放采购。</p>`;
-    body += '<p class="hint">先打开原文核对企业或公告；值得跟进的企业可保存到客户管理。</p><div class="actions"><button data-tab="sources">调整条件重新查询</button><button data-tab="customers">查看已保存客户</button></div>';
-    if (!lookup.records.length) body += '<div class="empty"><h3>本次没有找到匹配记录</h3><p>试试更短的英文关键词、企业全称，或换一个查询范围。没有结果不代表企业不存在或市场没有需求。</p></div>';
+    body += '<div class="actions"><button data-tab="sources">调整条件重新查询</button><button data-tab="customers">查看已保存客户</button></div>';
+    if (!lookup.records.length) body += '<div class="empty"><h3>暂无匹配记录</h3><p>可缩短关键词或更换查询范围。</p></div>';
     body += lookup.records
       .map(
         (record, index) =>
@@ -632,7 +648,7 @@ async function selectJob(id) {
       .join("");
   if (result.contact_candidates?.length) {
     body +=
-      '<h3>正文中发现的邮箱</h3><p class="hint">请先核对公司归属；未验证可投递性，不会自动覆盖客户联系方式。</p>';
+      '<h3>邮箱候选</h3>';
     body += result.contact_candidates
       .map(
         (contact) =>
@@ -1240,8 +1256,10 @@ function showSourceInfo() {
   $("#source-stage-field").hidden = !["find_tender", "contracts_finder"].includes(row?.id);
   $("#source-info").textContent = row ? `${row.coverage}。${row.limitations} ${row.license_note}` : "当前目的暂无可用来源，请选择其他查询目的或稍后再试。";
   $("#source-guidance").textContent = row ? (row.id === "worldbank_notices" ? "当前查询世界银行采购公告，不支持国家筛选。" : row.id === "gleif" ? "覆盖拥有全球企业身份编码的主体，并非所有企业。查不到不代表企业不存在。" : row.id === "companies_house" ? "查询英国企业登记信息；其他国家请换一个查询范围。" : `本次使用「${row.name}」查找${row.access === "direct_api" ? "公开记录" : "可公开检索的网页"}。`) : "当前目的暂无可用来源。可切换查询目的，或使用「找客户」。";
+  $("#source-status").hidden = row?.status === "configured";
   const operation = row?.access === "direct_api" ? "source_lookup" : "public_search";
-  $("#source-price").textContent = `本次按${state.prices[operation] ?? "当前报价"} 点预占；查询只返回一页。结果可在任务管理查看。`;
+  const price = state.prices[operation];
+  $("#source-price").textContent = price === undefined ? "报价未加载" : `预占 ${price} 点 · 查询一页`;
   $("#source-submit").disabled = !row || row.status !== "configured";
 }
 $("#source-select").onchange = showSourceInfo;

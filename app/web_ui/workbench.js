@@ -77,8 +77,8 @@ async function loadWorkbench() {
   $("#wb-prev").disabled=wb.offset===0; $("#wb-next").disabled=wb.offset+30>=page.total;
   $("#wb-views").innerHTML='<option value="">选择视图</option>'+views.map((v,i)=>`<option value="${i}">${escape(v.data.name)}</option>`).join("");
   $("#wb-products").innerHTML='<option value="">选择产品</option>'+products.map(p=>`<option value="${p.id}">${escape(p.data.name)}</option>`).join("");
-  $("#wb-tasks").innerHTML=tasks.filter(t=>!['done','stopped'].includes(t.status)).slice(0,50).map(t=>`<article class="wb-row"><b>${escape(t.company)}</b><p>${escape(date(t.data.due_at))} · ${t.status==="due"?"已到期":"待执行"}</p><p>${escape(t.data.objective)}</p><button data-wb-open="${t.prospect_id}">打开客户准备跟进</button><button data-wb-done="${t.id}">标记已完成</button></article>`).join("") || '<p class="hint">暂无待办。回复、退信或停止联系后，后续提醒会停止。</p>';
-  $("#wb-inbox-capability").textContent=caps.imap?"同步最近20封邮件至待归档区，不改变远端已读状态；请核对客户及事件类型后归档。":"收件箱连接尚未配置，可导入EML并核对后归档。";
+  $("#wb-tasks").innerHTML=tasks.filter(t=>!['done','stopped'].includes(t.status)).slice(0,50).map(t=>`<article class="wb-row"><b>${escape(t.company)}</b><p>${escape(date(t.data.due_at))} · ${t.status==="due"?"已到期":"待执行"}</p><p>${escape(t.data.objective)}</p><button data-wb-open="${t.prospect_id}">打开客户准备跟进</button><button data-wb-done="${t.id}">标记已完成</button></article>`).join("") || '<p class="hint">暂无待办</p>';
+  $("#wb-inbox-capability").textContent=caps.imap?"同步最近 20 封邮件，不标记已读。":"收件箱未配置，可导入 .eml。";
   $("#wb-sync-inbox").disabled=!caps.imap;
   renderWbInbox(inbox);
 }
@@ -105,7 +105,7 @@ async function renderDiscoveryDelta(jobId) {
   try { data=await api(wbRoot()+"/discovery-delta/"+jobId); }
   catch(error) { if(error.status===404 || error.status===503) return; throw error; }
   if(state.selectedJob!==jobId) return;
-  $("#job-detail").insertAdjacentHTML("beforeend",`<hr><h3>本轮新增</h3><p>对比${data.baseline_jobs}个相同画像历史任务：新企业${data.new_companies}家，新增邮箱涉及${data.companies_with_new_email}家。</p><p class="hint">按规范化名称和地区比较，企业别名可能仍分开。仅比较记录变化，不代表新增采购需求。</p>${data.items.map(r=>`<p>${escape(r.name)}：${escape(({new_company:"首次出现",new_email:"新增邮箱",seen_before:"历史已出现"})[r.status])}</p>`).join("")}`);
+  $("#job-detail").insertAdjacentHTML("beforeend",`<hr><h3>本轮新增</h3><p>对比${data.baseline_jobs}个相同画像历史任务：新企业${data.new_companies}家，新增邮箱涉及${data.companies_with_new_email}家。</p>${copyHelp("新增记录口径", "按企业名和地区比对，别名可能分开统计。记录新增不代表有采购需求。")}${data.items.map(r=>`<p>${escape(r.name)}：${escape(({new_company:"首次出现",new_email:"新增邮箱",seen_before:"历史已出现"})[r.status])}</p>`).join("")}`);
 }
 document.addEventListener("change",event=>{
   const el=event.target;

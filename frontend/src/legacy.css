@@ -853,7 +853,7 @@
 .legacy .sidebar nav button { display: flex; align-items: center; gap: 12px; }
 .legacy .sidebar nav button.active { box-shadow: none; background: #eaf0ff; }
 .legacy .sidebar-bottom { border-top: 3px solid #ffbc45; }
-.legacy .welcome { background: radial-gradient(ellipse at 100% 0%, #fff2d7 0%, transparent 56%), linear-gradient(115deg, #f6f9ff, #eaf1ff); border: 1px solid #dfe8fb; color: var(--navy); min-height: 304px; gap: 32px; }
+.legacy .welcome { background: radial-gradient(ellipse at 100% 0%, #fff2d7 0%, transparent 56%), linear-gradient(115deg, #f6f9ff, #eaf1ff); border: 1px solid #dfe8fb; color: var(--navy); min-height: auto; gap: 32px; }
 .legacy .welcome::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #2456ee 0%, #2456ee 45%, #ffbc45); }
 .legacy .welcome h2 { color: var(--navy); font-weight: 700; font-size: clamp(30px, 3vw, 42px); line-height: 1.45; }
 .legacy .welcome h2 em { color: var(--blue); font-style: normal; }
@@ -1000,7 +1000,7 @@
 .legacy .discovery-edit { margin: 15px 0; }
 .legacy .discovery-edit > summary, .legacy #discovery-free-text > summary { cursor: pointer; font-size: 12px; }
 .legacy #discovery-chat-pane { min-width: 0; }
-.legacy #discovery-chat-pane > .chat-messages { min-height: 0; max-height: 280px; margin-top: 14px; }
+.legacy #discovery-transcript .chat-messages { min-height: 0; max-height: 280px; padding: 10px 0; margin-top: 8px; }
 .legacy #discovery-chat-retry { margin-top: 10px; }
 @media(max-width:650px) { .legacy .discovery-brief { padding: 14px; } .legacy .brief-footer { align-items: flex-start; flex-direction: column; gap: 0; } .legacy .discovery-brief > fieldset > button[type=submit] { width: 100%; } .legacy .builder-steps { gap: 5px; } .legacy .builder-steps span { font-size: 11px; padding: 6px 8px; } }
 
@@ -1012,7 +1012,6 @@
 .legacy .discovery-brief .brief-footer { margin: 8px 0; }
 .legacy .discovery-brief .role-choices { margin-top: 12px; }
 .legacy .discovery-brief .role-choices legend { margin-bottom: 4px; }
-.legacy #discovery-chat-pane > .chat-messages { padding: 10px 0; margin-top: 8px; }
 .legacy #discovery-chat-plan, .legacy #discovery-chat-questions { scroll-margin-top: 20px; }
 .legacy .wb-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 10px; align-items: end; margin-bottom: 16px; }
 .legacy .wb-row { padding: 16px; background: var(--surface, white); border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
@@ -1026,3 +1025,67 @@
 .legacy #workbench select, .legacy #workbench input, .legacy #workbench textarea { max-width: 100%; }
 @media(max-width:650px) { .legacy .wb-filters { grid-template-columns: minmax(0,1fr); } .legacy #workbench .toolbar { align-items: stretch; } .legacy .wb-axes { grid-template-columns: minmax(0,1fr); } }
 @media(max-width:650px) { .legacy .brief-basics { grid-template-columns: minmax(0, 1fr); gap: 5px; } }
+.legacy .copy-help {
+  display: inline-block;
+  position: relative;
+  margin: 0;
+  vertical-align: middle;
+}
+.legacy .copy-help > summary {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #bac7dc;
+  border-radius: 50%;
+  background: #fff;
+  color: #3c5274;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  line-height: 1;
+}
+.legacy .copy-help > summary::-webkit-details-marker { display: none; }
+.legacy .copy-help > summary:focus-visible { outline: 2px solid #2559ee; outline-offset: 2px; }
+.legacy .copy-help > .copy-help-content {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 0;
+  width: min(280px, calc(100vw - 48px));
+  padding: 12px 14px;
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  background: #fff;
+  color: #354762;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: start;
+  line-height: 1.6;
+  box-shadow: 0 6px 20px #15264422;
+}
+.legacy .copy-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.legacy .copy-heading > :is(h2, h3, h4) { margin: 0; }
+.legacy .copy-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.legacy .chat-messages:empty { display: none; }
+@media (max-width: 600px) {
+  .legacy .copy-help > .copy-help-content {
+    position: fixed;
+    inset: auto 16px 16px;
+    width: auto;
+  }
+}
