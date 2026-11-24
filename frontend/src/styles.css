@@ -1293,6 +1293,44 @@ button:focus-visible {
   margin-bottom: 18px;
 }
 
+.customer-payment-hint {
+  margin-bottom: 16px;
+}
+
+.followup-objective {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.insurance-assessment h4 {
+  margin: 8px 0 16px;
+}
+
+.insurance-assessment .ant-descriptions,
+.insurance-assessment section {
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+
+.insurance-assessment ul {
+  margin: 6px 0 0;
+  padding-inline-start: 20px;
+}
+
+.insurance-assessment li + li {
+  margin-top: 4px;
+}
+
+.insurance-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insurance-actions {
+  flex-wrap: wrap;
+}
+
 /* Keep frequently used controls readable in dense business views. */
 .metric-top > .ant-typography,
 .filter-bottom .ant-checkbox-wrapper,

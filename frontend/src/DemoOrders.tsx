@@ -4,6 +4,7 @@ import {
   Alert, Button, Card, Descriptions, Modal, Statistic, Tabs, Tag, Timeline,
 } from "antd";
 import { CheckCircleOutlined, CreditCardOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { formatDate } from "./ui-state";
 
 const usd = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
 export const formatUsd = (amount: number) => `USD ${usd.format(amount)}`;
@@ -81,6 +82,20 @@ type DemoPageProps = {
   select: (order: DemoOrder) => void;
 };
 
+export type DemoReminder = { dueAt: string; objective: string };
+type DemoAssessmentProps = {
+  openDemoAssessment: () => void;
+  assessmentReminder?: DemoReminder;
+};
+
+function DemoAssessmentReminder({ reminder }: { reminder?: DemoReminder }) {
+  if (!reminder) return null;
+  return <Alert type="success" showIcon title="演示跟进待办" description={<>
+    <div>提醒时间 {formatDate(reminder.dueAt)}</div>
+    <div className="followup-objective">{reminder.objective}</div>
+  </>} />;
+}
+
 function DemoBanner({ mode }: { mode: "payment" | "protection" }) {
   const payment = mode === "payment";
   return (
@@ -94,7 +109,7 @@ function DemoBanner({ mode }: { mode: "payment" | "protection" }) {
           <Tag color="gold">演示</Tag>
           <HelpHint label="演示说明">
             {payment ? "订单与流水均为样例。演示对账不会发起真实收款，刷新后恢复样例。"
-              : "订单和资料均为样例。预览不会提交投保或融资申请。"}
+              : "订单和资料均为样例。演示待办随页面刷新重置。"}
           </HelpHint>
         </div>
       </div>
@@ -127,7 +142,7 @@ function OrderList({ orders, order, select }: DemoPageProps) {
   );
 }
 
-export function PaymentsDemo({ orders, order, select, reconcile, openProtection }: DemoPageProps & {
+export function PaymentsDemo({ orders, order, select, reconcile, openProtection, openDemoAssessment, assessmentReminder }: DemoPageProps & DemoAssessmentProps & {
   reconcile: () => void;
   openProtection: () => void;
 }) {
@@ -158,8 +173,10 @@ export function PaymentsDemo({ orders, order, select, reconcile, openProtection 
           <div className="demo-actions">
             {balance > 0 && <Button onClick={() => setDialog("reminder")}>预览收款提醒</Button>}
             {receipt && <Button type="primary" onClick={() => setDialog("reconcile")}>核对回款流水</Button>}
+            <Button onClick={openDemoAssessment}>排查账期风险</Button>
             <Button onClick={openProtection}>查看订单保障</Button>
           </div>
+          <DemoAssessmentReminder reminder={assessmentReminder} />
           <h3 className="demo-subheading">订单与收款进度</h3>
           <Timeline items={[
             { color: "green", content: "已确认合同与付款条款" },
@@ -204,16 +221,24 @@ function materialRows(order: DemoOrder) {
   ];
 }
 
-export function ProtectionDemo({ orders, order, select, openPayments }: DemoPageProps & { openPayments: () => void }) {
+export function ProtectionDemo({ orders, order, select, openPayments, openAssessment, openDemoAssessment, assessmentReminder }: DemoPageProps & DemoAssessmentProps & {
+  openPayments: () => void;
+  openAssessment: () => void;
+}) {
   const [preview, setPreview] = useState<"insurance" | "funding" | null>(null);
   const materials = materialRows(order);
   const available = materials.filter(({ present }) => present).length;
   return (
     <div className="native-page business-page">
+      <Card title="外贸账期风险排查" size="small"
+        extra={<Button type="primary" onClick={openAssessment}>开始排查</Button>}>
+        根据买方付款条件和现有保障生成签约前核对清单。
+      </Card>
       <DemoBanner mode="protection" />
       <div className="demo-order-layout">
         <OrderList {...{ orders, order, select }} />
         <Card title={order.product} extra={<Button size="small" onClick={openPayments}>查看订单收款</Button>}>
+          <DemoAssessmentReminder reminder={assessmentReminder} />
           <Tabs items={[
             { key: "insurance", label: "货运与经营保障", children: <>
               <Descriptions size="small" column={1} items={[
@@ -223,6 +248,7 @@ export function ProtectionDemo({ orders, order, select, openPayments }: DemoPage
                 { key: "missing", label: "资料待核对", children: order.shipment.missing },
               ]} />
               <div className="demo-actions">
+                <Button onClick={openDemoAssessment}>排查账期风险</Button>
                 <Button type="primary" onClick={() => setPreview("insurance")}>预览保障需求清单</Button>
               </div>
             </> },

@@ -44,7 +44,7 @@ function localDateTime(value?: string) {
 }
 
 export function CustomerActionModal({
-  action, row, bridge, stages, draftPrice, onClose, onSaved,
+  action, row, bridge, stages, draftPrice, onClose, onSaved, openAssessment, suspended,
 }: {
   action: CustomerAction;
   row: RecordData;
@@ -53,6 +53,8 @@ export function CustomerActionModal({
   draftPrice?: number;
   onClose: () => void;
   onSaved: (message: string) => void;
+  openAssessment?: () => void;
+  suspended?: boolean;
 }) {
   const [form] = Form.useForm();
   const [busy, setBusy] = useState(false);
@@ -104,7 +106,7 @@ export function CustomerActionModal({
   }
 
   return (
-    <Modal title={title} open width={440} footer={null}
+    <Modal title={title} open={!suspended} width={440} footer={null}
       onCancel={busy ? undefined : onClose} closable={!busy} keyboard={!busy} maskClosable={!busy}>
       {error && <Alert className="modal-error" type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" disabled={busy} data-extension="react"
@@ -153,6 +155,9 @@ export function CustomerActionModal({
             </Form.Item>
             {activityKind === "opt_out" && (
               <Alert type="warning" title="保存后将停止联系该客户并清除下次跟进时间。" />
+            )}
+            {openAssessment && activityKind !== "opt_out" && (
+              <Button type="link" onClick={openAssessment}>核对付款条件</Button>
             )}
           </>
         )}

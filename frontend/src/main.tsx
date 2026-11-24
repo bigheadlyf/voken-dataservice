@@ -74,6 +74,7 @@ import { WorkbenchActionModal, type WorkbenchAction } from "./WorkbenchAction";
 import { CustomerActionModal, type CustomerAction } from "./CustomerAction";
 import { CustomerContactSearch, type ContactSearch } from "./CustomerContactSearch";
 import { BusinessPages } from "./BusinessPages";
+import { InsuranceAssessment } from "./InsuranceAssessment";
 import { HelpHint } from "./HelpHint";
 import {
   FILTER_DEFAULTS,
@@ -205,7 +206,7 @@ function Auth({ ready }: { ready: boolean }) {
             <li><strong>订单与收款</strong><span>查看应收与对账流程</span></li>
             <li><strong>保障与融资</strong><span>梳理保障需求与融资资料</span></li>
           </ul>
-          <p className="auth-demo-note">收款、保障与融资提供演示流程。</p>
+          <p className="auth-demo-note">可排查外贸账期风险。订单收款与融资为演示流程。</p>
         </div>
       </div>
       <div className="auth-form-wrap">
@@ -550,11 +551,16 @@ function CustomerDrawer({
   const [tab, setTab] = useState(initialTab);
   const [action, setAction] = useState<CustomerAction | null>(null);
   const [contactSearch, setContactSearch] = useState<ContactSearch | null>(null);
+  const [assessmentOpen, setAssessmentOpen] = useState(false);
+  const [assessmentHintDismissed, setAssessmentHintDismissed] = useState(false);
   const [applyingSource, setApplyingSource] = useState(false);
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      setData(null);
+      setAssessmentOpen(false);
+      return;
+    }
     let cancelled = false;
-    setData(null);
     setError("");
     void bridge
       .detail(id)
@@ -646,6 +652,12 @@ function CustomerDrawer({
                 label: "客户资料",
                 children: (
                   <>
+                    {row.stage === "negotiating" && !assessmentHintDismissed && !row.do_not_contact && (
+                      <Alert className="customer-payment-hint" type="info" showIcon closable
+                        title="准备确认付款条件？"
+                        action={<Button size="small" onClick={() => setAssessmentOpen(true)}>核对付款条件</Button>}
+                        onClose={() => setAssessmentHintDismissed(true)} />
+                    )}
                     <Descriptions
                       column={1}
                       bordered
@@ -841,9 +853,10 @@ function CustomerDrawer({
                               } as Record<string, string>
                             )[r.kind] || r.kind,
                           content:
-                            (r.kind === "followup"
-                              ? `提醒时间：${date(r.data.due_at)} · ${r.data.objective || ""}`
-                              : "") ||
+                            (r.kind === "followup" && <>
+                              <div>提醒时间：{date(r.data.due_at)}</div>
+                              <div className="followup-objective">{r.data.objective}</div>
+                            </>) ||
                             (r.kind === "contact_event"
                               ? `${historyLabels[r.data.type] || "联系事件"} · ${r.data.email || ""}：${r.data.content || ""}`
                               : "") ||
@@ -880,6 +893,8 @@ function CustomerDrawer({
     {active && row && action && (
       <CustomerActionModal key={action} action={action} row={row} bridge={bridge} stages={stages}
         draftPrice={prices.outreach_draft} onClose={() => setAction(null)}
+        suspended={assessmentOpen}
+        openAssessment={action === "activity" && !row.do_not_contact ? () => setAssessmentOpen(true) : undefined}
         onSaved={(text) => {
           setAction(null);
           if (action === "activity") setTab("history");
@@ -890,6 +905,15 @@ function CustomerDrawer({
     {active && row && contactSearch && (
       <CustomerContactSearch kind={contactSearch} row={row} bridge={bridge} pointQuotes={pointQuotes}
         onClose={() => setContactSearch(null)} />
+    )}
+    {active && row && assessmentOpen && (
+      <InsuranceAssessment bridge={bridge}
+        customer={{ id, name: row.name, location: row.location, do_not_contact: row.do_not_contact }}
+        onClose={() => setAssessmentOpen(false)} onSaved={() => {
+          setAssessmentHintDismissed(true);
+          setTab("history");
+          refreshCustomer();
+        }} />
     )}
     </>
   );

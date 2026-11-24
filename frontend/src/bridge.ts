@@ -1,6 +1,7 @@
 // The remaining business forms share the original, tenant-aware API and submission logic.
 // React owns the shell and data views; the compatibility DOM is never reconciled by React.
 export type RecordData = Record<string, any>;
+export type CustomerChoice = { id: string; name: string; location: string; do_not_contact: boolean };
 export interface ProspectingAgent {
   id: string;
   status: string;
@@ -29,8 +30,9 @@ export interface Bridge {
   filter(values: RecordData, offset?: number): Promise<void>;
   select(ids: string[]): void;
   detail(id: string): Promise<RecordData>;
+  searchCustomers(query: string): Promise<CustomerChoice[]>;
   post(path: string, body: RecordData, slot?: string): Promise<RecordData>;
-  openCustomer(id: string, tab?: "profile" | "contacts"): Promise<void>;
+  openCustomer(id: string, tab?: "profile" | "contacts" | "history"): Promise<void>;
   closeCustomer(): void;
   updateCustomer(id: string, version: number, changes: RecordData): Promise<RecordData>;
   recordActivity(id: string, values: RecordData): Promise<RecordData>;

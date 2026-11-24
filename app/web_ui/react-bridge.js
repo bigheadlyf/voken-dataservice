@@ -124,6 +124,11 @@
       const company=companies.items.find(c=>c.id===id);
       return {prospect,activities,contacts:company?.contacts || [],duplicates:company?.duplicates || [],records,savedContacts};
     },
+    async searchCustomers(query) {
+      const params = new URLSearchParams({q: query, limit: "20"});
+      const result = await api(root()+"/crm/prospects?"+params);
+      return result.items;
+    },
     post(path, body, slot) { return perform(()=>wbPost(path,body,slot)); },
     async openCustomer(id, tab = "profile") {
       customerId = id;

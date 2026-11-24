@@ -1,11 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Button, Card, Descriptions, Modal, Skeleton, Tag } from "antd";
 import {
   AimOutlined, ArrowRightOutlined, ClockCircleOutlined, ContactsOutlined, CreditCardOutlined,
   MailOutlined, RobotOutlined, SafetyCertificateOutlined, TeamOutlined, ThunderboltOutlined, WalletOutlined,
 } from "@ant-design/icons";
 import type { Bridge, ProspectingAgent, Snapshot } from "./bridge";
-import { demoOrders, getDemoTotals, PaymentsDemo, ProtectionDemo } from "./DemoOrders";
+import { demoOrders, getDemoTotals, PaymentsDemo, ProtectionDemo, type DemoReminder } from "./DemoOrders";
+import { InsuranceAssessment } from "./InsuranceAssessment";
 import "./business-pages.css";
 
 const shortcuts = [
@@ -13,7 +14,7 @@ const shortcuts = [
   { label: "客户工作台", icon: <ContactsOutlined />, target: "workbench" },
   { label: "邮件管理", icon: <MailOutlined />, target: "mail" },
   { label: "订单对账", icon: <CreditCardOutlined />, target: "orders-payments", demo: true },
-  { label: "保障与融资", icon: <SafetyCertificateOutlined />, target: "protection-funding", demo: true },
+  { label: "保障与融资", icon: <SafetyCertificateOutlined />, target: "protection-funding" },
   { label: "用量与费用", icon: <WalletOutlined />, target: "costs" },
 ];
 
@@ -61,10 +62,11 @@ function Employee({ name, detail, icon, demo, onClick }: {
   );
 }
 
-function Dashboard({ data, totals, navigate }: {
+function Dashboard({ data, totals, navigate, openAssessment }: {
   data: Snapshot;
   totals: ReturnType<typeof getDemoTotals>;
   navigate: (route: string) => void;
+  openAssessment: () => void;
 }) {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const employee = data.dashboardAgents?.find(({ id }) => id === employeeId);
@@ -103,12 +105,11 @@ function Dashboard({ data, totals, navigate }: {
               <Button type="link" onClick={() => navigate("discover")}>发现客户</Button>
             </div>
           )}
-          <h3>演示员工</h3>
           <div className="business-grid employee-grid">
+            <Employee name="保险分析师" detail="外贸账期风险排查" icon={<SafetyCertificateOutlined />}
+              onClick={openAssessment} />
             <Employee name="收款跟进员" detail="提醒与对账" icon={<CreditCardOutlined />}
               demo onClick={() => navigate("orders-payments")} />
-            <Employee name="保险分析师" detail="保障需求" icon={<SafetyCertificateOutlined />}
-              demo onClick={() => navigate("protection-funding")} />
           </div>
         </Card>
       </section>
@@ -147,18 +148,41 @@ function EmployeeDetails({ employee: { status, config } }: { employee: Prospecti
 export function BusinessPages({ data, bridge }: { data: Snapshot; bridge: Bridge }) {
   const [orders, setOrders] = useState(demoOrders);
   const [orderId, setOrderId] = useState(demoOrders[0].id);
+  const [assessmentMode, setAssessmentMode] = useState<{ page: string; demo: boolean } | null>(null);
+  const [demoReminders, setDemoReminders] = useState<Record<string, DemoReminder>>({});
+  useEffect(() => setAssessmentMode(null), [data.tab]);
   const order = orders.find(({ id }) => id === orderId) ?? orders[0];
   const navigate = (route: string) => { void bridge.navigate(route).catch(() => {}); };
-  const demoProps = { orders, order, select: ({ id }: (typeof orders)[number]) => setOrderId(id) };
-  if (data.tab === "my-overview") return <Dashboard data={data} totals={getDemoTotals(orders)} navigate={navigate} />;
-  if (data.tab === "orders-payments") return (
+  const openAssessment = () => setAssessmentMode({ page: data.tab, demo: false });
+  const openDemoAssessment = () => setAssessmentMode({ page: data.tab, demo: true });
+  const assessment = assessmentMode?.page === data.tab && <InsuranceAssessment bridge={bridge}
+    key={assessmentMode.demo ? order.id : "manual"}
+    onClose={() => setAssessmentMode(null)}
+    onDemoStart={assessmentMode.demo ? undefined : openDemoAssessment}
+    demo={assessmentMode.demo ? { ...order, onSave: (reminder) => {
+      setDemoReminders((current) => ({ ...current, [order.id]: reminder }));
+      if (data.tab === "my-overview") navigate("protection-funding");
+    } } : undefined} />;
+  const demoProps = {
+    orders, order, select: ({ id }: (typeof orders)[number]) => setOrderId(id),
+    openDemoAssessment, assessmentReminder: demoReminders[order.id],
+  };
+  if (data.tab === "my-overview") return <>
+    <Dashboard data={data} totals={getDemoTotals(orders)} navigate={navigate} openAssessment={openAssessment} />
+    {assessment}
+  </>;
+  if (data.tab === "orders-payments") return <>
     <PaymentsDemo {...demoProps} openProtection={() => navigate("protection-funding")}
       reconcile={() => setOrders((current) => current.map((item) => (
         item.id === orderId && item.receipt
           ? { ...item, received: item.received + item.receipt.amount, receipt: undefined }
           : item
       )))} />
-  );
-  if (data.tab === "protection-funding") return <ProtectionDemo {...demoProps} openPayments={() => navigate("orders-payments")} />;
+    {assessment}
+  </>;
+  if (data.tab === "protection-funding") return <>
+    <ProtectionDemo {...demoProps} openPayments={() => navigate("orders-payments")} openAssessment={openAssessment} />
+    {assessment}
+  </>;
   return null;
 }
