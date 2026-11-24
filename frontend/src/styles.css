@@ -100,26 +100,57 @@ button:focus-visible {
 .auth-intro-copy {
   margin-block: auto;
   padding: 44px 0;
+  max-width: 620px;
 }
 .auth-intro-copy h1 {
-  font-size: clamp(32px, 3.5vw, 54px);
-  line-height: 1.45;
+  font-size: clamp(32px, 3.6vw, 56px);
+  line-height: 1.25;
   letter-spacing: -0.035em;
   font-weight: 650;
   color: var(--brand-ink);
   margin: 16px 0;
 }
 .auth-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0;
   color: var(--brand-blue);
   font-size: 14px;
   font-weight: 650;
+}
+.auth-kicker::before {
+  content: "";
+  width: 23px;
+  height: 3px;
+  border-radius: 2px;
+  background: #e5a32a;
 }
 .auth-lead {
   margin: 0;
   color: var(--brand-muted);
   font-size: 16px;
   line-height: 1.8;
+}
+.auth-capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 20px 0 0;
+  margin: 24px 0 12px;
+  list-style: none;
+  border-top: 1px solid #dae3f2;
+}
+.auth-capabilities strong,
+.auth-capabilities span {
+  display: block;
+}
+.auth-capabilities strong { color: var(--brand-ink); }
+.auth-capabilities span,
+.auth-demo-note {
+  margin: 5px 0 0;
+  color: var(--brand-muted);
+  font-size: 13px;
 }
 .auth-form-wrap {
   display: flex;
@@ -765,18 +796,23 @@ button:focus-visible {
 .help-hint-button {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border: 1px solid #bac7dc;
+  border: 0;
   border-radius: 50%;
-  background: #fff;
-  color: #3c5274;
+  background: transparent;
+  color: #6a7b98;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
+}
+.help-hint-button:hover,
+.help-hint-button[aria-expanded="true"] { color: #2559ee; background: #edf3ff; }
+@media (pointer: coarse) {
+  .help-hint-button { width: 28px; height: 28px; }
 }
 .help-hint-button:focus-visible {
   outline: 2px solid #2559ee;
@@ -1063,10 +1099,12 @@ button:focus-visible {
     padding: 20px 0 0;
   }
   .auth-intro-copy h1 {
-    font-size: 32px;
+    font-size: clamp(25px, 7.5vw, 32px);
     letter-spacing: -1px;
-    margin: 18px 0;
+    margin: 11px 0;
   }
+  .auth-capabilities { gap: 8px; padding-top: 10px; margin: 12px 0 6px; }
+  .auth-capabilities span { display: none; }
   .auth-form-wrap {
     padding: 30px 24px 44px;
   }

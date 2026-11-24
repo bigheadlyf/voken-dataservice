@@ -196,7 +196,17 @@ function Auth({ ready }: { ready: boolean }) {
     >
       <div className="auth-intro">
         <Brand />
-        <div className="auth-intro-copy"><h1>AI 客户开发工作台</h1></div>
+        <div className="auth-intro-copy">
+          <p className="auth-kicker">跨境业务工作台</p>
+          <h1><span className="brand-highlight">AI</span> 助力出海经营<br />从找到客户到<span className="brand-accent">跟进订单</span></h1>
+          <p className="auth-lead">按产品和市场找客户，核对线索来源，在一个工作台里管理客户资料、开发信与跟进记录。</p>
+          <ul className="auth-capabilities">
+            <li><strong>客户开发</strong><span>发现客户与采购机会</span></li>
+            <li><strong>订单与收款</strong><span>查看应收与对账流程</span></li>
+            <li><strong>保障与融资</strong><span>梳理保障需求与融资资料</span></li>
+          </ul>
+          <p className="auth-demo-note">收款、保障与融资提供演示流程。</p>
+        </div>
       </div>
       <div className="auth-form-wrap">
         <div className="auth-form-card">

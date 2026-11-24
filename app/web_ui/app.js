@@ -136,10 +136,23 @@ const state = {
 };
 let toastTimer;
 function copyHelp(label, content) {
-  return `<details class="copy-help"><summary aria-label="${escape(label)}">?</summary><div class="copy-help-content">${escape(content)}</div></details>`;
+  return `<details class="copy-help"><summary aria-label="${escape(label)}"></summary><div class="copy-help-content">${escape(content)}</div></details>`;
 }
+document.addEventListener("pointerover", (event) => {
+  if (event.pointerType !== "mouse") return;
+  const help = event.target.closest?.(".copy-help");
+  if (help && !help.contains(event.relatedTarget)) help.open = true;
+});
+document.addEventListener("pointerout", (event) => {
+  if (event.pointerType !== "mouse") return;
+  const help = event.target.closest?.(".copy-help");
+  if (help && !help.contains(event.relatedTarget)) help.open = false;
+});
 document.addEventListener("click", (event) => {
   const clicked = event.target.closest?.(".copy-help");
+  if (event.pointerType === "mouse" && clicked && event.target.closest("summary")) {
+    event.preventDefault();
+  }
   for (const help of document.querySelectorAll(".copy-help[open]")) {
     if (help !== clicked) help.open = false;
   }

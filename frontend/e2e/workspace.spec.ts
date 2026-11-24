@@ -94,11 +94,17 @@ test("top-level navigation keeps customer tools in their section on desktop and 
   await expect(page.locator("#page-title")).toHaveText("发现客户");
 });
 
-test("page help stays out of the way and opens on desktop and mobile", async ({ page }) => {
+test("help overlays stay in place on mouse hover, keyboard focus and touch", async ({ page, browser }) => {
   const metricsHelp = page.getByRole("button", { name: "客户数据口径", exact: true });
   await expect(metricsHelp).toHaveAttribute("aria-expanded", "false");
+  const toolbar = page.locator(".workbench-tabs");
+  const toolbarPosition = await toolbar.boundingBox();
+  await metricsHelp.hover();
+  await expect(page.getByText(/邮箱按地址去重/)).toBeVisible();
+  expect(await toolbar.boundingBox()).toEqual(toolbarPosition);
+  await page.locator("#page-title").hover();
+  await expect(metricsHelp).toHaveAttribute("aria-expanded", "false");
   await metricsHelp.focus();
-  await page.keyboard.press("Enter");
   await expect(page.getByText(/邮箱按地址去重/)).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(metricsHelp).toHaveAttribute("aria-expanded", "false");
@@ -112,18 +118,52 @@ test("page help stays out of the way and opens on desktop and mobile", async ({ 
   await expect(page.getByRole("heading", { name: "找客条件", exact: true })).toBeVisible();
   await expect(page.getByText("任务创建小贴士", { exact: true })).toHaveCount(0);
   await expect(explanation).toBeHidden();
-  await trigger.click();
+  const guidedForm = page.locator("#discovery-guided-form");
+  const formPosition = await guidedForm.boundingBox();
+  await trigger.hover();
+  await expect(explanation).toBeVisible();
+  expect(await guidedForm.boundingBox()).toEqual(formPosition);
+  await page.locator("#page-title").hover();
+  await expect(explanation).toBeHidden();
+  await trigger.focus();
+  await page.keyboard.press("Enter");
   await expect(explanation).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(explanation).toBeHidden();
   await page.screenshot({ path: resolve(evidence, "discovery-copy-desktop.png") });
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await trigger.click();
-  await expect(explanation).toBeInViewport({ ratio: 1 });
-  await page.screenshot({ path: resolve(evidence, "discovery-help-mobile.png") });
-  await page.getByRole("heading", { name: "发现客户", exact: true }).click();
-  await expect(explanation).toBeHidden();
+  const mobile = await browser.newContext({
+    baseURL: new URL(page.url()).origin,
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  try {
+    const phone = await mobile.newPage();
+    await phone.goto("/app");
+    await expect(phone.locator("#auth .auth-capabilities")).toBeVisible();
+    await expect(phone.getByRole("button", { name: "进入工作台", exact: true })).toBeInViewport();
+    await phone.screenshot({ path: resolve(evidence, "login-intro-mobile.png") });
+    await login(phone);
+    const metric = phone.getByRole("button", { name: "客户数据口径", exact: true });
+    await metric.tap();
+    await expect(phone.getByText(/邮箱按地址去重/)).toBeVisible();
+    await phone.goto("/app#discover");
+    const help = phone.locator('#discover summary[aria-label="找客说明"]');
+    const panel = phone.locator("#discover .copy-help").filter({
+      has: phone.getByLabel("找客说明", { exact: true }),
+    }).locator(".copy-help-content");
+    const form = phone.locator("#discovery-guided-form");
+    const before = await form.boundingBox();
+    await help.tap();
+    await expect(panel).toBeInViewport({ ratio: 1 });
+    expect(await form.boundingBox()).toEqual(before);
+    await phone.screenshot({ path: resolve(evidence, "discovery-help-mobile.png") });
+    await phone.locator("#page-title").tap();
+    await expect(panel).toBeHidden();
+  } finally {
+    await mobile.close();
+  }
 
   await page.route("**/discovery/plan", (route) => route.fulfill({
     json: {
@@ -134,7 +174,6 @@ test("page help stays out of the way and opens on desktop and mobile", async ({ 
       },
     },
   }));
-  const guidedForm = page.locator("#discovery-guided-form");
   await guidedForm.getByLabel("产品", { exact: true }).fill("LED");
   await guidedForm.getByLabel("目标市场", { exact: true }).fill("美国");
   await guidedForm.getByRole("button", { name: "生成方案", exact: true }).click();
@@ -146,7 +185,7 @@ test("page help stays out of the way and opens on desktop and mobile", async ({ 
 
   await page.goto("/app?legacy=true#discover");
   await expect(page.getByRole("heading", { name: "找客条件", exact: true })).toBeVisible();
-  await page.locator('#discover summary[aria-label="找客说明"]').click();
+  await page.locator('#discover summary[aria-label="找客说明"]').hover();
   await expect(page.getByText(/确认方案前不会创建任务/)).toBeVisible();
 });
 
@@ -537,7 +576,13 @@ test("registration challenge and login create a separate empty workspace", async
 }) => {
   await page.getByRole("button", { name: "退出登录", exact: true }).click();
   await expect(page.locator("#auth")).toBeVisible();
+  const intro = page.locator("#auth .auth-intro");
+  await expect(intro.getByRole("heading", { level: 1 })).toContainText("助力出海经营");
+  await expect(intro.getByText("保障与融资", { exact: true })).toBeVisible();
+  await expect(intro.getByText("收款、保障与融资提供演示流程。")).toBeVisible();
+  await page.screenshot({ path: resolve(evidence, "login-intro-desktop.png") });
   await page.locator("#register-panel > summary").click();
+  await expect(intro).toBeVisible();
   const form = page.locator("#register-form");
   await form.locator("[name=phone]").fill("13900000993");
   await form.locator("[name=password]").fill("ui-test-password");
